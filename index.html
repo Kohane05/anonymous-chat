@@ -1,3 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>匿名私信</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
+h2{text-align:center;margin-bottom:1.5rem;color:#ccc}
+#chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
+.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%}
+.other{background:#2a2a2a;margin-right:auto}
+.me{background:#254b70;margin-left:auto;text-align:right}
+.time{font-size:0.7rem;color:#999;margin-top:4px}
+#inputArea{display:flex;gap:0.5rem}
+textarea{flex:1;padding:0.8rem;background:#222;border:1px solid #444;border-radius:8px;color:#fff;resize:none}
+button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<h2>匿名私信</h2>
+<div id="chatBox"></div>
+<div id="inputArea">
+  <textarea id="msgInput" placeholder="寫訊息..."></textarea>
+  <button onclick="sendMsg()">送出</button>
+</div>
+
+<script>
 // ========= 這裡之後要替換成你 Supabase 的資料 =========
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
@@ -47,3 +77,6 @@ supabase.channel(`room-${roomId}`)
   .subscribe()
 
 loadMsg();
+</script>
+</body>
+</html>
