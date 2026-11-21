@@ -28,7 +28,7 @@ button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius
 // 一樣替換成你的 Supabase 資訊
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function loadAllRooms(){
   const {data,error}=await supabase
@@ -70,14 +70,16 @@ function renderRoomMsg(roomId, list){
 }
 
 async function delMsg(id){
-  await supabase.from("messages").delete().eq("id",id);
+  const {error} = await supabase.from("messages").delete().eq("id",id);
+  if(error) console.log("刪除錯誤：",error);
   loadAllRooms();
 }
 
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
   if(!txt) return;
-  await supabase.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
+  const {error} = await supabase.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
+  if(error) console.log("送出錯誤：",error);
   document.getElementById(`rep-${roomId}`).value="";
   loadAllRooms();
 }
