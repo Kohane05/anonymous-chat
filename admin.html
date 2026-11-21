@@ -28,14 +28,18 @@ button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius
 // 一樣替換成你的 Supabase 資訊
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// 變數改名為 sb，避免和全域 supabase 物件撞名
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function loadAllRooms(){
-  const {data,error}=await supabase
+  const {data,error}=await sb
     .from("messages")
     .select("*")
     .order("created_at",{asc:true})
-  if(error) return;
+  if(error) {
+    console.log("載入錯誤：", error);
+    return;
+  }
   // 依照 room_id 分組
   const groups = {};
   data.forEach(m=>{
@@ -70,7 +74,7 @@ function renderRoomMsg(roomId, list){
 }
 
 async function delMsg(id){
-  const {error} = await supabase.from("messages").delete().eq("id",id);
+  const {error} = await sb.from("messages").delete().eq("id",id);
   if(error) console.log("刪除錯誤：",error);
   loadAllRooms();
 }
@@ -78,14 +82,14 @@ async function delMsg(id){
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
   if(!txt) return;
-  const {error} = await supabase.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
+  const {error} = await sb.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
   if(error) console.log("送出錯誤：",error);
   document.getElementById(`rep-${roomId}`).value="";
   loadAllRooms();
 }
 
 // 即時監聽
-supabase.channel("all")
+sb.channel("all")
   .on("postgres_changes",{event:"*",schema:"public",table:"messages"},()=>loadAllRooms())
   .subscribe()
 
