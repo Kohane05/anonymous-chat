@@ -8,7 +8,10 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
-h2{text-align:center;margin-bottom:1.5rem;color:#ccc}
+h2{text-align:center;margin-bottom:1rem;color:#ccc}
+.tab{display:flex;gap:0.5rem;margin-bottom:1rem}
+.tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
+.tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
 #chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
 .msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%}
 .other{background:#2a2a2a;margin-right:auto}
@@ -21,6 +24,10 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
 </head>
 <body>
 <h2>匿名私信</h2>
+<div class="tab">
+  <button id="btnGlobal">🌐 公開大廳</button>
+  <button id="btnPrivate">✉️ 我的專屬私信</button>
+</div>
 <div id="chatBox"></div>
 <div id="inputArea">
   <textarea id="msgInput" placeholder="寫訊息..."></textarea>
@@ -28,17 +35,55 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
 </div>
 
 <script>
-// ========= 這裡之後要替換成你 Supabase 的資料 =========
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-// =======================================================
-// 變數改名為 sb，避免和全域 supabase 物件撞名
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 從網址拿到 room_id，每一個人專屬房間
+// 固定設定
+const GLOBAL_ROOM = "global";
+const ADMIN_PREFIX = "dm_admin_";
+
+// 取得或生成本機訪客ID（存在瀏覽器localStorage，匿名）
+function getVisitorId(){
+  let vid = localStorage.getItem("visitor_id");
+  if(!vid){
+    vid = crypto.randomUUID();
+    localStorage.setItem("visitor_id", vid);
+  }
+  return vid;
+}
+const visitorId = getVisitorId();
+const privateRoomId = ADMIN_PREFIX + visitorId;
+
+// 當前使用的 roomId
+let roomId;
+let isVisitor = true;
+let channel = null;
+
+// 切換房間函式
+function switchRoom(newRoom){
+  roomId = newRoom;
+  // 標籤樣式
+  document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
+  document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
+  loadMsg();
+  subscribeRealtime();
+}
+
+// 監聽按鈕
+document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
+document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
+
+// 優先讀網址參數，沒有就預設切到自己的私聊房
 const urlParams = new URLSearchParams(location.search);
-const roomId = urlParams.get("room") || "demo";
-const isVisitor = !urlParams.get("admin");
+const urlRoom = urlParams.get("room");
+if(urlRoom){
+  roomId = urlRoom;
+  document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
+  document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
+}else{
+  switchRoom(privateRoomId);
+}
 
 function renderChat(rows){
   const box = document.getElementById("chatBox");
@@ -72,12 +117,16 @@ async function sendMsg(){
   loadMsg();
 }
 
-// 即時監聽
-sb.channel(`room-${roomId}`)
-  .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},()=>loadMsg())
-  .subscribe()
+// 重新綁定即時監聽（切房間要換channel）
+function subscribeRealtime(){
+  if(channel) channel.unsubscribe();
+  channel = sb.channel(`room-${roomId}`)
+    .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},()=>loadMsg())
+    .subscribe()
+}
 
 loadMsg();
+subscribeRealtime();
 </script>
 </body>
 </html>
