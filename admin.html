@@ -1,34 +1,7 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>管理後台｜匿名私信</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
-body{background:#111;color:#eee;padding:1rem;max-width:900px;margin:0 auto}
-h2{text-align:center;margin-bottom:1rem}
-.room{border:1px solid #333;border-radius:8px;padding:1rem;margin-bottom:1rem;background:#181818}
-.room-id{color:#888;font-size:0.8rem;margin-bottom:0.5rem}
-.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;display:flex;justify-content:space-between}
-.visitor{background:#272727}
-.admin{background:#203b58}
-.del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem}
-.reply-area{margin-top:0.6rem;display:flex;gap:0.5rem}
-textarea{flex:1;padding:0.6rem;background:#222;border:1px solid #444;border-radius:6px;color:#fff;resize:none}
-button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius:6px;cursor:pointer}
-</style>
-</head>
-<body>
-<h2>管理後台</h2>
-<div id="container"></div>
-
 <script>
 // 一樣替換成你的 Supabase 資訊
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-// 變數改名為 sb，避免和全域 supabase 物件撞名
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function loadAllRooms(){
@@ -75,7 +48,11 @@ function renderRoomMsg(roomId, list){
 
 async function delMsg(id){
   const {error} = await sb.from("messages").delete().eq("id",id);
-  if(error) console.log("刪除錯誤：",error);
+  if(error) {
+    console.log("刪除錯誤：",error);
+    return;
+  }
+  // ✅ 刪除成功立刻重載，不用等 realtime
   loadAllRooms();
 }
 
@@ -95,5 +72,3 @@ sb.channel("all")
 
 loadAllRooms();
 </script>
-</body>
-</html>
