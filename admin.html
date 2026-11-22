@@ -11,13 +11,8 @@ body{background:#111;color:#eee;padding:1rem;max-width:900px;margin:0 auto}
 h2{text-align:center;margin-bottom:1rem}
 .room{border:1px solid #333;border-radius:8px;padding:1rem;margin-bottom:1rem;background:#181818}
 .room-id{color:#888;font-size:0.8rem;margin-bottom:0.5rem}
-.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;display:flex;justify-content:space-between}
-.visitor{background:#272727}
-.admin{background:#203b58}
-.del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem}
-.reply-area{margin-top:0.6rem;display:flex;gap:0.5rem}
-textarea{flex:1;padding:0.6rem;background:#222;border:1px solid #444;border-radius:6px;color:#fff;resize:none}
-button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius:6px;cursor:pointer}
+.msg-item{padding:0.4rem 0;border-bottom:1px solid #222}
+.del-btn{margin-left:0.5rem;background:#a33;color:#fff;border:none;border-radius:4px;padding:0.2rem 0.4rem;cursor:pointer}
 </style>
 </head>
 <body>
@@ -25,73 +20,75 @@ button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius
 <div id="container"></div>
 
 <script>
-const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
-const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-// 變數改名為 sb，避免和全域 supabase 物件撞名
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 替換成你的 Supabase URL 跟 anon key
+const SUPABASE_URL = "你的SUPABASE_URL";
+const SUPABASE_KEY = "你的ANON_KEY";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-async function loadAllRooms(){
-  const {data,error}=await sb
+// ========== 通知 + 提示音 ==========
+let notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
+async function requestNotify() {
+  if (!("Notification" in window)) return false;
+  const perm = await Notification.requestPermission();
+  return perm === "granted";
+}
+function showNotify(title, body) {
+  if (Notification.permission === "granted") {
+    new Notification(title, { body });
+  }
+  notifyAudio.play().catch(e=>{});
+}
+requestNotify();
+
+const container = document.getElementById("container");
+
+async function loadAllRooms() {
+  const { data } = await supabase
     .from("messages")
     .select("*")
-    .order("created_at",{asc:true})
-  if(error) {
-    console.log("載入錯誤：", error);
-    return;
-  }
-  const groups = {};
+    .order("created_at", { ascending:true });
+  const group = {};
   data.forEach(m=>{
-    if(!groups[m.room_id]) groups[m.room_id]=[];
-    groups[m.room_id].push(m);
+    if(!group[m.room_id]) group[m.room_id] = [];
+    group[m.room_id].push(m);
   })
-  const box = document.getElementById("container");
-  box.innerHTML = "";
-  Object.keys(groups).forEach(roomId=>{
-    const roomDiv = document.createElement("div");
-    roomDiv.className="room";
-    roomDiv.innerHTML = `<div class="room-id">房間ID：${roomId}</div><div class="msg-list" id="r-${roomId}"></div>
-    <div class="reply-area">
-      <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
-      <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
-    </div>`
-    box.appendChild(roomDiv);
-    renderRoomMsg(roomId, groups[roomId]);
+  renderRooms(group);
+}
+function renderRooms(groups) {
+  container.innerHTML = "";
+  Object.keys(groups).forEach(rid=>{
+    const wrap = document.createElement("div");
+    wrap.className = "room";
+    wrap.innerHTML = `<div class="room-id">房間ID：${rid}</div>`;
+    groups[rid].forEach(msg=>{
+      const line = document.createElement("div");
+      line.className = "msg-item";
+      line.innerText = msg.content;
+      const del = document.createElement("button");
+      del.className = "del-btn";
+      del.innerText = "刪除";
+      del.onclick = async ()=>{
+        await supabase.from("messages").delete().eq("id", msg.id);
+        loadAllRooms();
+      }
+      line.appendChild(del);
+      wrap.appendChild(line);
+    })
+    container.appendChild(wrap);
   })
 }
 
-function renderRoomMsg(roomId, list){
-  const el = document.getElementById(`r-${roomId}`);
-  el.innerHTML = "";
-  list.forEach(m=>{
-    const div = document.createElement("div");
-    div.className = "msg "+(m.is_admin?"admin":"visitor");
-    div.innerHTML = `<span>${m.content}<br><small>${m.created_at}</small></span>
-    <button class="del-btn" onclick="delMsg(${m.id})">刪除</button>`
-    el.appendChild(div);
-  })
-}
-
-async function delMsg(id){
-  const {error} = await sb.from("messages").delete().eq("id",id);
-  if(error) {
-    console.log("刪除錯誤：",error);
-    return;
-  }
+// 監聽全部訊息，有新訊息就通知管理員
+supabase.channel("admin-all")
+.on("postgres_changes", {
+  event:"INSERT",
+  schema:"public",
+  table:"messages"
+}, ()=>{
   loadAllRooms();
-}
-
-async function sendAdminMsg(roomId){
-  const txt = document.getElementById(`rep-${roomId}`).value.trim();
-  if(!txt) return;
-  const {error} = await sb.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
-  if(error) console.log("送出錯誤：",error);
-  document.getElementById(`rep-${roomId}`).value="";
-  loadAllRooms();
-}
-
-sb.channel("all")
-  .on("postgres_changes",{event:"*",schema:"public",table:"messages"},()=>loadAllRooms())
-  .subscribe()
+  showNotify("有新匿名訊息", "某個聊天室收到訊息");
+})
+.subscribe();
 
 loadAllRooms();
 </script>
