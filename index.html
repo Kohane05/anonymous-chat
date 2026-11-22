@@ -211,44 +211,91 @@ function cancelReply(){
   document.getElementById("replyStatus").style.display = "none";
 }
 
-// 表情反應：一人一次、可收回
+// ✅ 表情反應：樂觀更新，不跳滾動
 window.addReaction = async function(msgId, emoji){
-  try {
-    const record = getReactionRecord();
-    const key = `${msgId}_${emoji}`;
-    const hasReacted = !!record[key];
+  const record = getReactionRecord();
+  const key = `${msgId}_${emoji}`;
+  const hasReacted = !!record[key];
 
+  // 樂觀更新：先改 DOM
+  updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
+
+  // 更新本機紀錄
+  if(hasReacted){
+    delete record[key];
+  }else{
+    record[key] = true;
+  }
+  setReactionRecord(record);
+
+  // 背景同步資料庫
+  try {
     const {data: row, error: selectErr} = await sb
       .from("messages")
       .select("reactions")
       .eq("id", msgId)
       .single();
-    
     if(selectErr) throw selectErr;
 
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
-    
-    if(hasReacted){
-      current[emoji] = (current[emoji] || 1) - 1;
-      if(current[emoji] <= 0) delete current[emoji];
-      delete record[key];
-    }else{
-      current[emoji] = (current[emoji] || 0) + 1;
-      record[key] = true;
-    }
-
-    setReactionRecord(record);
+    current[emoji] = (current[emoji] || 0) + (hasReacted ? -1 : 1);
+    if(current[emoji] <= 0) delete current[emoji];
 
     const {error: updateErr} = await sb
       .from("messages")
       .update({ reactions: current })
       .eq("id", msgId);
-    
     if(updateErr) throw updateErr;
-    loadMsg();
-
   } catch(e) {
-    console.error("表情更新失敗：", e);
+    console.error("表情同步失敗：", e);
+    // 失敗就復原 DOM
+    updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
+    if(hasReacted){
+      record[key] = true;
+    }else{
+      delete record[key];
+    }
+    setReactionRecord(record);
+  }
+}
+
+// 局部更新單則訊息的表情
+function updateReactionDom(msgId, emoji, delta){
+  const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
+  if(!msgEl) return;
+
+  let reactionsBox = msgEl.querySelector(".msg-reactions");
+  let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
+
+  let count = target ? parseInt(target.dataset.count) : 0;
+  count += delta;
+
+  if(count <= 0){
+    if(target) target.remove();
+  } else {
+    if(target){
+      target.dataset.count = count;
+      target.childNodes[0].textContent = `${emoji} ${count}`;
+    } else {
+      if(!reactionsBox){
+        reactionsBox = document.createElement("div");
+        reactionsBox.className = "msg-reactions";
+        const timeEl = msgEl.querySelector(".time");
+        timeEl.parentNode.insertBefore(reactionsBox, timeEl);
+      }
+      const span = document.createElement("span");
+      span.className = "reaction-item";
+      span.dataset.emoji = emoji;
+      span.dataset.count = count;
+      span.innerText = `${emoji} ${count}`;
+      span.onclick = ()=>addReaction(msgId, emoji);
+      reactionsBox.appendChild(span);
+    }
+  }
+
+  // 歸零後清空容器
+  if(reactionsBox && reactionsBox.children.length === 0){
+    reactionsBox.remove();
   }
 }
 
@@ -258,20 +305,16 @@ function renderChat(rows){
   rows.forEach(r=>{
     const div = document.createElement("div");
 
-    // ✅ 修正：左右判斷邏輯
-    // 有 sender_id → 精準比對 visitorId
-    // 沒有 sender_id 的舊訊息 → 一律視為他人，全部靠左
     let isMe = false;
     if(r.sender_id && r.sender_id.trim() !== ""){
       isMe = r.sender_id === visitorId;
     }
     div.className = "msg " + (isMe ? "me" : "other");
+    div.dataset.id = r.id;
     
-    // 顯示暱稱
     const nick = r.nickname || "匿名使用者";
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
-    // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
@@ -281,17 +324,15 @@ function renderChat(rows){
     
     div.innerHTML += `<div>${r.content}</div>`;
     
-    // 表情反應顯示
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
-        reactionHtml += `<span class="reaction-item" onclick="addReaction(${r.id}, '${emoji}')">${emoji} ${count}</span>`;
+        reactionHtml += `<span class="reaction-item" data-emoji="${emoji}" data-count="${count}" onclick="addReaction(${r.id}, '${emoji}')">${emoji} ${count}</span>`;
       })
       reactionHtml += '</div>';
       div.innerHTML += reactionHtml;
     }
 
-    // 左下角快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -299,9 +340,7 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
-    // 回覆按鈕
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
-    
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
@@ -335,17 +374,51 @@ async function sendMsg(){
   
   document.getElementById("msgInput").value = "";
   cancelReply();
-  loadMsg();
 }
 
 function subscribeRealtime(){
   if(channel) channel.unsubscribe();
   channel = sb.channel(`room-${roomId}`)
-    .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},()=>{
-      loadMsg();
-      showNotify("新訊息", "你有一則新的匿名訊息");
+    .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},(payload)=>{
+      if(payload.eventType === "INSERT"){
+        loadMsg();
+        showNotify("新訊息", "你有一則新的匿名訊息");
+      } else if(payload.eventType === "UPDATE"){
+        // UPDATE 只局部更新表情，不重繪、不跳動
+        const newRow = payload.new;
+        updateReactionDomFull(newRow.id, newRow.reactions);
+      }
     })
     .subscribe()
+}
+
+// 用完整 reactions 物件更新單則訊息
+function updateReactionDomFull(msgId, reactions){
+  const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
+  if(!msgEl) return;
+
+  let reactionsBox = msgEl.querySelector(".msg-reactions");
+  if(!reactionsBox){
+    reactionsBox = document.createElement("div");
+    reactionsBox.className = "msg-reactions";
+    const timeEl = msgEl.querySelector(".time");
+    timeEl.parentNode.insertBefore(reactionsBox, timeEl);
+  }
+
+  reactionsBox.innerHTML = "";
+  if(reactions && Object.keys(reactions).length > 0){
+    Object.entries(reactions).forEach(([emoji, count])=>{
+      const span = document.createElement("span");
+      span.className = "reaction-item";
+      span.dataset.emoji = emoji;
+      span.dataset.count = count;
+      span.innerText = `${emoji} ${count}`;
+      span.onclick = ()=>addReaction(msgId, emoji);
+      reactionsBox.appendChild(span);
+    })
+  } else {
+    reactionsBox.remove();
+  }
 }
 
 loadMsg();
