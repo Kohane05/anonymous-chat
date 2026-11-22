@@ -57,6 +57,16 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// 格式化時間：月-日 時:分，自動轉本地時區
+function formatTime(isoString){
+  const date = new Date(isoString);
+  const m = String(date.getMonth()+1).padStart(2,'0');
+  const d = String(date.getDate()).padStart(2,'0');
+  const hh = String(date.getHours()).padStart(2,'0');
+  const mm = String(date.getMinutes()).padStart(2,'0');
+  return `${m}-${d} ${hh}:${mm}`;
+}
+
 // 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
@@ -250,7 +260,8 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
   
-  inner += `<span>${m.content}<br><small>${m.created_at}</small>`;
+  // 格式化後的時間
+  inner += `<span>${m.content}<br><small>${formatTime(m.created_at)}</small>`;
   
   // 表情反應顯示
   if(m.reactions && Object.keys(m.reactions).length > 0){
