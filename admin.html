@@ -57,14 +57,32 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// 格式化時間：月-日 時:分，自動轉本地時區
+// ========== 時間格式化（修正時區：強制台北時區，月-日 時:分） ==========
 function formatTime(isoString){
-  const date = new Date(isoString);
-  const m = String(date.getMonth()+1).padStart(2,'0');
-  const d = String(date.getDate()).padStart(2,'0');
-  const hh = String(date.getHours()).padStart(2,'0');
-  const mm = String(date.getMinutes()).padStart(2,'0');
-  return `${m}-${d} ${hh}:${mm}`;
+  if(!isoString) return "";
+  let s = String(isoString).trim();
+  s = s.replace(" ", "T");
+  // 只補全結尾處只寫 +00 / -08 這種缺分鐘的偏移（不動日期部分的減號）
+  s = s.replace(/([+-]\d{2})$/, "$1:00");
+  // 若字串沒有時區標記（Z 或 ±HH:mm），Supabase 預設存的是 UTC，補上 Z 避免被當成本地時間
+  if(!/([Zz]|[+-]\d{2}:\d{2})$/.test(s)){
+    s += "Z";
+  }
+  const date = new Date(s);
+  if(isNaN(date.getTime())) return "";
+  const fmt = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  const parts = fmt.formatToParts(date);
+  const get = t => (parts.find(p => p.type === t) || {}).value || "";
+  let hh = get("hour");
+  if(hh === "24") hh = "00";
+  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
 }
 
 // 通知 + 提示音
