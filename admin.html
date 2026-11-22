@@ -185,44 +185,90 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// 表情反應：一人一次、可收回
+// ✅ 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
-  try {
-    const record = getReactionRecord();
-    const key = `${msgId}_${emoji}`;
-    const hasReacted = !!record[key];
+  const record = getReactionRecord();
+  const key = `${msgId}_${emoji}`;
+  const hasReacted = !!record[key];
 
+  // 樂觀更新 DOM
+  updateReactionDom(roomId, msgId, emoji, hasReacted ? -1 : 1);
+
+  if(hasReacted){
+    delete record[key];
+  }else{
+    record[key] = true;
+  }
+  setReactionRecord(record);
+
+  try {
     const {data: row, error: selectErr} = await sb
       .from("messages")
       .select("reactions")
       .eq("id", msgId)
       .single();
-    
     if(selectErr) throw selectErr;
 
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
-    
-    if(hasReacted){
-      current[emoji] = (current[emoji] || 1) - 1;
-      if(current[emoji] <= 0) delete current[emoji];
-      delete record[key];
-    }else{
-      current[emoji] = (current[emoji] || 0) + 1;
-      record[key] = true;
-    }
-
-    setReactionRecord(record);
+    current[emoji] = (current[emoji] || 0) + (hasReacted ? -1 : 1);
+    if(current[emoji] <= 0) delete current[emoji];
 
     const {error: updateErr} = await sb
       .from("messages")
       .update({ reactions: current })
       .eq("id", msgId);
-    
     if(updateErr) throw updateErr;
-    loadRoomMsg(roomId, true);
-
   } catch(e) {
-    console.error("表情更新失敗：", e);
+    console.error("表情同步失敗：", e);
+    // 失敗復原
+    updateReactionDom(roomId, msgId, emoji, hasReacted ? 1 : -1);
+    if(hasReacted){
+      record[key] = true;
+    }else{
+      delete record[key];
+    }
+    setReactionRecord(record);
+  }
+}
+
+// 局部更新單則訊息表情
+function updateReactionDom(roomId, msgId, emoji, delta){
+  const listEl = document.getElementById(`r-${roomId}`);
+  if(!listEl) return;
+  const msgEl = listEl.querySelector(`.msg[data-id="${msgId}"]`);
+  if(!msgEl) return;
+
+  let reactionsBox = msgEl.querySelector(".msg-reactions");
+  let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
+
+  let count = target ? parseInt(target.dataset.count) : 0;
+  count += delta;
+
+  if(count <= 0){
+    if(target) target.remove();
+  } else {
+    if(target){
+      target.dataset.count = count;
+      target.childNodes[0].textContent = `${emoji} ${count}`;
+    } else {
+      if(!reactionsBox){
+        reactionsBox = document.createElement("div");
+        reactionsBox.className = "msg-reactions";
+        const textSpan = msgEl.querySelector("span");
+        textSpan.appendChild(reactionsBox);
+      }
+      const span = document.createElement("span");
+      span.className = "reaction-item";
+      span.dataset.emoji = emoji;
+      span.dataset.count = count;
+      span.innerText = `${emoji} ${count}`;
+      span.onclick = ()=>addReaction(roomId, msgId, emoji);
+      reactionsBox.appendChild(span);
+    }
+  }
+
+  if(reactionsBox && reactionsBox.children.length === 0){
+    reactionsBox.remove();
   }
 }
 
@@ -261,9 +307,6 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
 function createMsgElement(roomId, m, allRows){
   const div = document.createElement("div");
 
-  // ✅ 修正：左右判斷邏輯
-  // 有 sender_id → 比對 admin 標記
-  // 沒有 sender_id 的舊訊息 → 用 is_admin 兜底
   let isMe = false;
   if(m.sender_id && m.sender_id.trim() !== ""){
     isMe = m.sender_id === ADMIN_SENDER_ID;
@@ -271,9 +314,9 @@ function createMsgElement(roomId, m, allRows){
     isMe = m.is_admin;
   }
   div.className = "msg "+(isMe ? "admin" : "visitor");
+  div.dataset.id = m.id;
   
   let inner = "";
-  // 顯示暱稱
   const nick = m.nickname || (isMe ? ADMIN_NICKNAME : "匿名使用者");
   inner += `<div class="msg-nick">${nick}</div>`;
 
@@ -286,17 +329,15 @@ function createMsgElement(roomId, m, allRows){
   
   inner += `<span>${m.content}<br><small>${formatTime(m.created_at)}</small>`;
   
-  // 表情反應顯示
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
-      inner += `<span class="reaction-item" onclick="addReaction('${roomId}', ${m.id}, '${emoji}')">${emoji} ${count}</span>`;
+      inner += `<span class="reaction-item" data-emoji="${emoji}" data-count="${count}" onclick="addReaction('${roomId}', ${m.id}, '${emoji}')">${emoji} ${count}</span>`;
     })
     inner += '</div>';
   }
   inner += `</span>`;
 
-  // 快捷表情列
   inner += '<span><div class="msg-reaction-bar">';
   QUICK_EMOJIS.forEach(e=>{
     inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
@@ -363,15 +404,49 @@ sb.channel("all")
     const newMsg = payload.new;
     if(payload.eventType === "INSERT"){
       showNotify("有新匿名訊息", `房間 ${newMsg.room_id} 收到新訊息`);
-    }
-    const listEl = document.getElementById(`r-${newMsg.room_id}`);
-    if(listEl){
-      loadRoomMsg(newMsg.room_id, true);
-    }else{
-      loadAllRooms();
+      const listEl = document.getElementById(`r-${newMsg.room_id}`);
+      if(listEl){
+        loadRoomMsg(newMsg.room_id, true);
+      }else{
+        loadAllRooms();
+      }
+    } else if(payload.eventType === "UPDATE"){
+      // UPDATE 只局部更新表情，不重繪、不跳動
+      updateReactionDomFull(newMsg.room_id, newMsg.id, newMsg.reactions);
     }
   })
   .subscribe()
+
+// 用完整 reactions 更新單則訊息
+function updateReactionDomFull(roomId, msgId, reactions){
+  const listEl = document.getElementById(`r-${roomId}`);
+  if(!listEl) return;
+  const msgEl = listEl.querySelector(`.msg[data-id="${msgId}"]`);
+  if(!msgEl) return;
+
+  let reactionsBox = msgEl.querySelector(".msg-reactions");
+  if(!reactionsBox){
+    reactionsBox = document.createElement("div");
+    reactionsBox.className = "msg-reactions";
+    const textSpan = msgEl.querySelector("span");
+    textSpan.appendChild(reactionsBox);
+  }
+
+  reactionsBox.innerHTML = "";
+  if(reactions && Object.keys(reactions).length > 0){
+    Object.entries(reactions).forEach(([emoji, count])=>{
+      const span = document.createElement("span");
+      span.className = "reaction-item";
+      span.dataset.emoji = emoji;
+      span.dataset.count = count;
+      span.innerText = `${emoji} ${count}`;
+      span.onclick = ()=>addReaction(roomId, msgId, emoji);
+      reactionsBox.appendChild(span);
+    })
+  } else {
+    reactionsBox.remove();
+  }
+}
 
 loadAllRooms();
 </script>
