@@ -15,15 +15,16 @@ h2{text-align:center;margin-bottom:1rem}
 .room-toggle{color:#666;font-size:1.2rem}
 .room-body{padding:0 1rem 1rem;display:block}
 .msg-list{height:300px;overflow-y:auto;padding-right:0.5rem;margin:0.8rem 0;border-bottom:1px solid #252525;display:flex;flex-direction:column}
-.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;display:flex;justify-content:space-between;word-break:break-word;position:relative}
-.visitor{background:#272727}
-.admin{background:#203b58}
-.reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8}
+.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.4}
+.visitor{background:#272727;margin-right:auto}
+.admin{background:#203b58;margin-left:auto;text-align:right}
+.reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
 .reply-btn{font-size:0.7rem;background:none;border:none;color:#aaa;cursor:pointer;margin-right:0.5rem}
 .del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem;flex-shrink:0;margin-left:0.8rem}
 
 /* 表情反應 */
-.msg-reactions{display:flex;gap:0.3rem;margin-top:0.3rem;flex-wrap:wrap}
+.msg-reactions{display:flex;gap:0.3rem;margin-top:0.3rem;flex-wrap:wrap;justify-content:flex-end}
+.visitor .msg-reactions{justify-content:flex-start}
 .reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:0.1rem 0.4rem;font-size:0.8rem;cursor:pointer}
 .msg-reaction-bar{
   position:absolute;bottom:-12px;left:6px;
@@ -31,6 +32,7 @@ h2{text-align:center;margin-bottom:1rem}
   border:1px solid #333;border-radius:20px;padding:0.15rem 0.4rem;z-index:10
 }
 .msg:hover .msg-reaction-bar{display:flex}
+.admin .msg-reaction-bar{left:auto;right:6px}
 .msg-reaction-bar span{cursor:pointer;font-size:0.85rem;padding:0 0.15rem}
 
 .load-more{width:100%;padding:0.4rem;background:#222;border:1px solid #333;color:#aaa;border-radius:4px;cursor:pointer;margin-bottom:0.6rem;font-size:0.8rem}
@@ -55,34 +57,25 @@ const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const ADMIN_SENDER_ID = "admin";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ========== 時間格式化（修正時區：強制台北時區，月-日 時:分） ==========
+// 格式化時間：月-日 時:分，自動轉台北時區
 function formatTime(isoString){
-  if(!isoString) return "";
   let s = String(isoString).trim();
-  s = s.replace(" ", "T");
-  // 只補全結尾處只寫 +00 / -08 這種缺分鐘的偏移（不動日期部分的減號）
-  s = s.replace(/([+-]\d{2})$/, "$1:00");
-  // 若字串沒有時區標記（Z 或 ±HH:mm），Supabase 預設存的是 UTC，補上 Z 避免被當成本地時間
-  if(!/([Zz]|[+-]\d{2}:\d{2})$/.test(s)){
-    s += "Z";
+  if(!/[Zz]|[+-]\d{2}/.test(s)){
+    s = s.replace(' ', 'T') + 'Z';
+  } else if(/[+-]\d{2}$/.test(s)){
+    s += ':00';
   }
   const date = new Date(s);
-  if(isNaN(date.getTime())) return "";
-  const fmt = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  const fmt = new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
     hour12: false
   });
-  const parts = fmt.formatToParts(date);
-  const get = t => (parts.find(p => p.type === t) || {}).value || "";
-  let hh = get("hour");
-  if(hh === "24") hh = "00";
-  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
+  return fmt.format(date).replace(/\//g, '-');
 }
 
 // 通知 + 提示音
@@ -208,12 +201,10 @@ window.addReaction = async function(roomId, msgId, emoji){
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
     
     if(hasReacted){
-      // 已經按過 → 收回
       current[emoji] = (current[emoji] || 1) - 1;
       if(current[emoji] <= 0) delete current[emoji];
       delete record[key];
     }else{
-      // 沒按過 → 加上
       current[emoji] = (current[emoji] || 0) + 1;
       record[key] = true;
     }
@@ -230,7 +221,6 @@ window.addReaction = async function(roomId, msgId, emoji){
 
   } catch(e) {
     console.error("表情更新失敗：", e);
-    alert("表情更新失敗，請開啟 F12 主控台查看錯誤");
   }
 }
 
@@ -268,7 +258,9 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
 
 function createMsgElement(roomId, m, allRows){
   const div = document.createElement("div");
-  div.className = "msg "+(m.is_admin?"admin":"visitor");
+  // 判斷是不是管理員自己發的
+  const isMe = m.sender_id ? (m.sender_id === ADMIN_SENDER_ID) : m.is_admin;
+  div.className = "msg "+(isMe ? "admin" : "visitor");
   
   let inner = "";
   if(m.reply_to){
@@ -278,7 +270,6 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
   
-  // 格式化後的時間
   inner += `<span>${m.content}<br><small>${formatTime(m.created_at)}</small>`;
   
   // 表情反應顯示
@@ -336,7 +327,12 @@ async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
   if(!txt) return;
   
-  const payload = {room_id:roomId, content:txt, is_admin:true};
+  const payload = {
+    room_id:roomId,
+    content:txt,
+    is_admin:true,
+    sender_id: ADMIN_SENDER_ID
+  };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   
   const {error} = await sb.from("messages").insert([payload])
