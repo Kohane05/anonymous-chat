@@ -13,7 +13,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
 .tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
 #chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
-.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%;position:relative}
+.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%;position:relative;line-height:1.4}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -24,7 +24,8 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .reply-status span{cursor:pointer;color:#aaa;margin-left:0.5rem}
 
 /* 表情反應樣式 */
-.msg-reactions{display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap}
+.msg-reactions{display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap;justify-content:flex-end}
+.other .msg-reactions{justify-content:flex-start}
 .reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:0.15rem 0.5rem;font-size:0.85rem;cursor:pointer}
 .reaction-item:hover{background:#2a2a2a}
 .msg-reaction-bar{
@@ -33,6 +34,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
   border:1px solid #333;border-radius:20px;padding:0.2rem 0.5rem;z-index:10
 }
 .msg:hover .msg-reaction-bar{display:flex}
+.me .msg-reaction-bar{left:auto;right:8px}
 .msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem}
 .msg-reaction-bar span:hover{transform:scale(1.2)}
 
@@ -75,32 +77,23 @@ const GLOBAL_ROOM = "global";
 const ADMIN_PREFIX = "dm_admin_";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ========== 時間格式化（修正時區：強制台北時區，月-日 時:分） ==========
+// 格式化時間：月-日 時:分，自動轉台北時區
 function formatTime(isoString){
-  if(!isoString) return "";
   let s = String(isoString).trim();
-  s = s.replace(" ", "T");
-  // 只補全結尾處只寫 +00 / -08 這種缺分鐘的偏移（不動日期部分的減號）
-  s = s.replace(/([+-]\d{2})$/, "$1:00");
-  // 若字串沒有時區標記（Z 或 ±HH:mm），Supabase 預設存的是 UTC，補上 Z 避免被當成本地時間
-  if(!/([Zz]|[+-]\d{2}:\d{2})$/.test(s)){
-    s += "Z";
+  // 統一補齊 UTC 標記，避免被誤判為本地時間
+  if(!/[Zz]|[+-]\d{2}/.test(s)){
+    s = s.replace(' ', 'T') + 'Z';
+  } else if(/[+-]\d{2}$/.test(s)){
+    s += ':00';
   }
   const date = new Date(s);
-  if(isNaN(date.getTime())) return "";
-  const fmt = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  const fmt = new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
     hour12: false
   });
-  const parts = fmt.formatToParts(date);
-  const get = t => (parts.find(p => p.type === t) || {}).value || "";
-  let hh = get("hour");
-  if(hh === "24") hh = "00"; // 部分瀏覽器午夜會回傳 24
-  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
+  return fmt.format(date).replace(/\//g, '-');
 }
 
 // 通知 + 提示音
@@ -133,7 +126,6 @@ const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
 let roomId;
-let isVisitor = true;
 let channel = null;
 
 // 讀取本機表情紀錄
@@ -214,12 +206,10 @@ window.addReaction = async function(msgId, emoji){
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
     
     if(hasReacted){
-      // 已經按過 → 收回
       current[emoji] = (current[emoji] || 1) - 1;
       if(current[emoji] <= 0) delete current[emoji];
       delete record[key];
     }else{
-      // 沒按過 → 加上
       current[emoji] = (current[emoji] || 0) + 1;
       record[key] = true;
     }
@@ -236,7 +226,6 @@ window.addReaction = async function(msgId, emoji){
 
   } catch(e) {
     console.error("表情更新失敗：", e);
-    alert("表情更新失敗，請開啟 F12 主控台查看錯誤");
   }
 }
 
@@ -245,7 +234,9 @@ function renderChat(rows){
   box.innerHTML = "";
   rows.forEach(r=>{
     const div = document.createElement("div");
-    div.className = "msg " + (r.is_admin ? "me" : "other");
+    // 判斷是不是自己發的：有 sender_id 就比對，沒有就相容舊資料
+    const isMe = r.sender_id ? (r.sender_id === visitorId) : !r.is_admin;
+    div.className = "msg " + (isMe ? "me" : "other");
     
     // 回覆引用
     if(r.reply_to){
@@ -267,7 +258,7 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
-    // 左下角快捷表情列（hover才顯示）
+    // 左下角快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -278,7 +269,6 @@ function renderChat(rows){
     // 回覆按鈕
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
     
-    // 格式化後的時間
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
@@ -301,7 +291,8 @@ async function sendMsg(){
   const payload = {
     room_id:roomId,
     content:text,
-    is_admin:isVisitor?false:true
+    is_admin:false,
+    sender_id: visitorId
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
   
