@@ -261,8 +261,10 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
 function createMsgElement(roomId, m, allRows){
   const div = document.createElement("div");
 
-  // 左右判斷：sender_id 優先
-  let isMe;
+  // ✅ 修正：左右判斷邏輯
+  // 有 sender_id → 比對 admin 標記
+  // 沒有 sender_id 的舊訊息 → 用 is_admin 兜底
+  let isMe = false;
   if(m.sender_id && m.sender_id.trim() !== ""){
     isMe = m.sender_id === ADMIN_SENDER_ID;
   } else {
