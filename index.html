@@ -108,6 +108,19 @@ let roomId;
 let isVisitor = true;
 let channel = null;
 
+// 讀取本機表情紀錄
+function getReactionRecord(){
+  try {
+    return JSON.parse(localStorage.getItem("reaction_record") || "{}");
+  } catch(e){
+    return {};
+  }
+}
+// 寫入本機表情紀錄
+function setReactionRecord(record){
+  localStorage.setItem("reaction_record", JSON.stringify(record));
+}
+
 function switchRoom(newRoom){
   roomId = newRoom;
   cancelReply();
@@ -155,9 +168,13 @@ function cancelReply(){
   document.getElementById("replyStatus").style.display = "none";
 }
 
-// ✅ 修復：表情反應函式掛到全域，加上錯誤捕獲與空值處理
+// 表情反應：一人一次、可收回
 window.addReaction = async function(msgId, emoji){
   try {
+    const record = getReactionRecord();
+    const key = `${msgId}_${emoji}`;
+    const hasReacted = !!record[key];
+
     const {data: row, error: selectErr} = await sb
       .from("messages")
       .select("reactions")
@@ -166,9 +183,20 @@ window.addReaction = async function(msgId, emoji){
     
     if(selectErr) throw selectErr;
 
-    // 相容 null、空值，預設給空物件
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
-    current[emoji] = (current[emoji] || 0) + 1;
+    
+    if(hasReacted){
+      // 已經按過 → 收回
+      current[emoji] = (current[emoji] || 1) - 1;
+      if(current[emoji] <= 0) delete current[emoji];
+      delete record[key];
+    }else{
+      // 沒按過 → 加上
+      current[emoji] = (current[emoji] || 0) + 1;
+      record[key] = true;
+    }
+
+    setReactionRecord(record);
 
     const {error: updateErr} = await sb
       .from("messages")
