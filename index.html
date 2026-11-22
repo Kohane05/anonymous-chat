@@ -133,7 +133,6 @@ function getVisitorId(){
 function getNickname(){
   let name = localStorage.getItem("nickname");
   if(!name){
-    // 預設隨機暱稱
     const rand = Math.random().toString(36).slice(2,6);
     name = `匿名_${rand}`;
     localStorage.setItem("nickname", name);
@@ -259,12 +258,12 @@ function renderChat(rows){
   rows.forEach(r=>{
     const div = document.createElement("div");
 
-    // 左右判斷：sender_id 優先
-    let isMe;
+    // ✅ 修正：左右判斷邏輯
+    // 有 sender_id → 精準比對 visitorId
+    // 沒有 sender_id 的舊訊息 → 一律視為他人，全部靠左
+    let isMe = false;
     if(r.sender_id && r.sender_id.trim() !== ""){
       isMe = r.sender_id === visitorId;
-    } else {
-      isMe = !r.is_admin;
     }
     div.className = "msg " + (isMe ? "me" : "other");
     
