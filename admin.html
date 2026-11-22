@@ -18,6 +18,7 @@ h2{text-align:center;margin-bottom:1rem}
 .msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.4}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
+.msg img{max-width:100%;border-radius:6px;margin:0.3rem 0;display:block}
 .msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
 .visitor .msg-nick{text-align:left}
 .reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -42,6 +43,9 @@ h2{text-align:center;margin-bottom:1rem}
 .reply-status{font-size:0.75rem;color:#8ab4f8;margin-bottom:0.4rem;display:none}
 .reply-status span{cursor:pointer;color:#aaa;margin-left:0.5rem}
 .reply-area{display:flex;gap:0.5rem;align-items:flex-end}
+.image-preview{display:none;margin-bottom:0.4rem;position:relative}
+.image-preview img{max-width:100px;border-radius:6px;border:1px solid #444}
+.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.7rem}
 .emoji-btn{padding:0 0.6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
 .emoji-panel{display:none;gap:0.4rem;padding:0.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:0.4rem;flex-wrap:wrap}
 .emoji-panel span{font-size:1.1rem;cursor:pointer;padding:0.2rem 0.3rem;border-radius:4px}
@@ -81,7 +85,7 @@ function formatTime(isoString){
   return fmt.format(date).replace(/\//g, '-');
 }
 
-// 依 sender_id 生成固定三位數編號，前後台一致
+// 依 sender_id 生成固定編號
 function getVisitorNick(senderId){
   if(!senderId || senderId.trim() === "") return "匿名訪客";
   let hash = 0;
@@ -111,6 +115,7 @@ requestNotify();
 const roomOldestTime = {};
 const PAGE_SIZE = 30;
 const roomReply = {};
+const roomImage = {}; // 每個房間的圖片暫存
 
 // 讀取本機表情紀錄
 function getReactionRecord(){
@@ -154,18 +159,25 @@ async function loadAllRooms(){
           回覆：<span id="replyText-${roomId}"></span>
           <span onclick="cancelRoomReply('${roomId}')">✕</span>
         </div>
+        <div class="image-preview" id="imgPreview-${roomId}">
+          <img id="imgPrev-${roomId}">
+          <span onclick="clearRoomImage('${roomId}')">✕</span>
+        </div>
         <div class="emoji-panel" id="emojiPanel-${roomId}">
           <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
           <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
         </div>
         <div class="reply-area">
           <button class="emoji-btn" onclick="toggleRoomEmoji('${roomId}')">😊</button>
+          <button onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
+          <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
           <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
           <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
         </div>
       </div>`
     box.appendChild(roomDiv);
 
+    // 綁定表情、圖片上傳
     setTimeout(()=>{
       document.querySelectorAll(`#emojiPanel-${roomId} span`).forEach(el=>{
         el.onclick = ()=>{
@@ -174,6 +186,29 @@ async function loadAllRooms(){
           input.focus();
         }
       })
+      document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
+        const file = e.target.files[0];
+        if(!file) return;
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        await new Promise(r=>img.onload = r);
+        
+        const maxWidth = 800;
+        let w = img.width, h = img.height;
+        if(w > maxWidth){
+          h = h * maxWidth / w;
+          w = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        
+        roomImage[roomId] = canvas.toDataURL("image/jpeg", 0.8);
+        document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
+        document.getElementById(`imgPreview-${roomId}`).style.display = "block";
+        e.target.value = "";
+      }
     },0)
 
     await loadRoomMsg(roomId, true);
@@ -183,6 +218,11 @@ async function loadAllRooms(){
 function toggleRoomEmoji(roomId){
   const panel = document.getElementById(`emojiPanel-${roomId}`);
   panel.style.display = panel.style.display === "flex" ? "none" : "flex";
+}
+
+function clearRoomImage(roomId){
+  roomImage[roomId] = null;
+  document.getElementById(`imgPreview-${roomId}`).style.display = "none";
 }
 
 function setRoomReply(roomId, msgId, content){
@@ -199,21 +239,16 @@ function cancelRoomReply(roomId){
 
 // 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
-  const record = getReactionRecord();
-  const key = `${msgId}_${emoji}`;
-  const hasReacted = !!record[key];
-
-  // 樂觀更新 DOM
-  updateReactionDom(roomId, msgId, emoji, hasReacted ? -1 : 1);
-
-  if(hasReacted){
-    delete record[key];
-  }else{
-    record[key] = true;
-  }
-  setReactionRecord(record);
-
   try {
+    const record = getReactionRecord();
+    const key = `${msgId}_${emoji}`;
+    const hasReacted = !!record[key];
+
+    updateReactionDom(roomId, msgId, emoji, hasReacted ? -1 : 1);
+    if(hasReacted) delete record[key];
+    else record[key] = true;
+    setReactionRecord(record);
+
     const {data: row, error: selectErr} = await sb
       .from("messages")
       .select("reactions")
@@ -230,20 +265,16 @@ window.addReaction = async function(roomId, msgId, emoji){
       .update({ reactions: current })
       .eq("id", msgId);
     if(updateErr) throw updateErr;
+
   } catch(e) {
-    console.error("表情同步失敗：", e);
-    // 失敗復原
+    console.error("表情更新失敗：", e);
     updateReactionDom(roomId, msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted){
-      record[key] = true;
-    }else{
-      delete record[key];
-    }
+    if(hasReacted) record[key] = true;
+    else delete record[key];
     setReactionRecord(record);
   }
 }
 
-// 局部更新單則訊息表情
 function updateReactionDom(roomId, msgId, emoji, delta){
   const listEl = document.getElementById(`r-${roomId}`);
   if(!listEl) return;
@@ -252,7 +283,6 @@ function updateReactionDom(roomId, msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -278,10 +308,7 @@ function updateReactionDom(roomId, msgId, emoji, delta){
       reactionsBox.appendChild(span);
     }
   }
-
-  if(reactionsBox && reactionsBox.children.length === 0){
-    reactionsBox.remove();
-  }
+  if(reactionsBox && reactionsBox.children.length === 0) reactionsBox.remove();
 }
 
 async function loadRoomMsg(roomId, isFirstLoad = false){
@@ -329,7 +356,6 @@ function createMsgElement(roomId, m, allRows){
   div.dataset.id = m.id;
   
   let inner = "";
-  // 顯示暱稱：管理員固定口哈內，訪客用自動編號
   const nick = isMe ? ADMIN_NICKNAME : getVisitorNick(m.sender_id);
   inner += `<div class="msg-nick">${nick}</div>`;
 
@@ -339,10 +365,15 @@ function createMsgElement(roomId, m, allRows){
     const short = quoteText.length > 18 ? quoteText.slice(0,18)+"..." : quoteText;
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
+
+  // 圖片
+  if(m.image){
+    inner += `<img src="${m.image}" alt="圖片">`;
+  }
   
-  inner += `<span>${m.content}<br><small>${formatTime(m.created_at)}</small>`;
+  inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
   
-  // 表情反應顯示
+  // 表情反應
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -360,7 +391,7 @@ function createMsgElement(roomId, m, allRows){
   inner += '</div>';
 
   inner += `
-    <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${m.content.replace(/'/g,"\\'")}')">回覆</button>
+    <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${m.content ? m.content.replace(/'/g,"\\'") : "圖片"}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
   </span>`;
   
@@ -395,7 +426,7 @@ async function delMsg(roomId, id){
 
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
-  if(!txt) return;
+  if(!txt && !roomImage[roomId]) return;
   
   const payload = {
     room_id:roomId,
@@ -405,12 +436,14 @@ async function sendAdminMsg(roomId){
     nickname: ADMIN_NICKNAME
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
+  if(roomImage[roomId]) payload.image = roomImage[roomId];
   
   const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：",error);
   
   document.getElementById(`rep-${roomId}`).value = "";
   cancelRoomReply(roomId);
+  clearRoomImage(roomId);
   setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
@@ -426,13 +459,11 @@ sb.channel("all")
         loadAllRooms();
       }
     } else if(payload.eventType === "UPDATE"){
-      // UPDATE 只局部更新表情，不重繪、不跳動
       updateReactionDomFull(newMsg.room_id, newMsg.id, newMsg.reactions);
     }
   })
   .subscribe()
 
-// 用完整 reactions 更新單則訊息
 function updateReactionDomFull(roomId, msgId, reactions){
   const listEl = document.getElementById(`r-${roomId}`);
   if(!listEl) return;
@@ -446,7 +477,6 @@ function updateReactionDomFull(roomId, msgId, reactions){
     const textSpan = msgEl.querySelector("span");
     textSpan.appendChild(reactionsBox);
   }
-
   reactionsBox.innerHTML = "";
   if(reactions && Object.keys(reactions).length > 0){
     Object.entries(reactions).forEach(([emoji, count])=>{
