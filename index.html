@@ -9,6 +9,9 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
 h2{text-align:center;margin-bottom:1rem;color:#ccc}
+.nickname-bar{display:flex;justify-content:flex-end;margin-bottom:0.8rem}
+.nickname-btn{font-size:0.8rem;background:none;border:1px solid #444;color:#aaa;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer}
+.nickname-btn:hover{color:#fff;border-color:#666}
 .tab{display:flex;gap:0.5rem;margin-bottom:1rem}
 .tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
 .tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
@@ -16,6 +19,8 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%;position:relative;line-height:1.4}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
+.msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
+.other .msg-nick{text-align:left}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
 .time{font-size:0.7rem;color:#999;margin-top:4px}
 .reply-btn{font-size:0.7rem;background:none;border:none;color:#888;cursor:pointer;padding:0 0.3rem}
@@ -49,6 +54,9 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
 </head>
 <body>
 <h2>匿名私信</h2>
+<div class="nickname-bar">
+  <button class="nickname-btn" onclick="editNickname()">✏️ 設定暱稱</button>
+</div>
 <div class="tab">
   <button id="btnGlobal">🌐 公開大廳</button>
   <button id="btnPrivate">✉️ 我的專屬私信</button>
@@ -80,7 +88,6 @@ const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 // 格式化時間：月-日 時:分，自動轉台北時區
 function formatTime(isoString){
   let s = String(isoString).trim();
-  // 統一補齊 UTC 標記，避免被誤判為本地時間
   if(!/[Zz]|[+-]\d{2}/.test(s)){
     s = s.replace(' ', 'T') + 'Z';
   } else if(/[+-]\d{2}$/.test(s)){
@@ -114,6 +121,7 @@ requestNotify();
 // 回覆狀態
 let currentReplyId = null;
 
+// 訪客ID + 暱稱
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
   if(!vid){
@@ -121,6 +129,23 @@ function getVisitorId(){
     localStorage.setItem("visitor_id", vid);
   }
   return vid;
+}
+function getNickname(){
+  let name = localStorage.getItem("nickname");
+  if(!name){
+    // 預設隨機暱稱
+    const rand = Math.random().toString(36).slice(2,6);
+    name = `匿名_${rand}`;
+    localStorage.setItem("nickname", name);
+  }
+  return name;
+}
+function editNickname(){
+  const oldName = getNickname();
+  const newName = prompt("輸入你的暱稱：", oldName);
+  if(newName && newName.trim()){
+    localStorage.setItem("nickname", newName.trim());
+  }
 }
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
@@ -136,7 +161,6 @@ function getReactionRecord(){
     return {};
   }
 }
-// 寫入本機表情紀錄
 function setReactionRecord(record){
   localStorage.setItem("reaction_record", JSON.stringify(record));
 }
@@ -234,10 +258,20 @@ function renderChat(rows){
   box.innerHTML = "";
   rows.forEach(r=>{
     const div = document.createElement("div");
-    // 判斷是不是自己發的：有 sender_id 就比對，沒有就相容舊資料
-    const isMe = r.sender_id ? (r.sender_id === visitorId) : !r.is_admin;
+
+    // 左右判斷：sender_id 優先
+    let isMe;
+    if(r.sender_id && r.sender_id.trim() !== ""){
+      isMe = r.sender_id === visitorId;
+    } else {
+      isMe = !r.is_admin;
+    }
     div.className = "msg " + (isMe ? "me" : "other");
     
+    // 顯示暱稱
+    const nick = r.nickname || "匿名使用者";
+    div.innerHTML += `<div class="msg-nick">${nick}</div>`;
+
     // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
@@ -292,7 +326,8 @@ async function sendMsg(){
     room_id:roomId,
     content:text,
     is_admin:false,
-    sender_id: visitorId
+    sender_id: visitorId,
+    nickname: getNickname()
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
   
