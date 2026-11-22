@@ -8,97 +8,148 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
-h2{text-align:center;margin-bottom:1.5rem;color:#ccc}
+h2{text-align:center;margin-bottom:1rem;color:#ccc}
+.tab{display:flex;gap:0.5rem;margin-bottom:1rem}
+.tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
+.tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
 #chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
-.msg{margin:0.6rem 0;line-height:1.5}
-.msg-self{text-align:right;color:#8cf}
-.msg-other{text-align:left;color:#fff}
-#msgInput{width:calc(100% - 80px);padding:0.7rem;border-radius:8px;border:none;background:#222;color:#eee;font-size:1rem}
-#sendBtn{width:72px;padding:0.7rem;border:none;border-radius:8px;background:#369;color:#fff;font-size:1rem;cursor:pointer}
+.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%}
+.other{background:#2a2a2a;margin-right:auto}
+.me{background:#254b70;margin-left:auto;text-align:right}
+.time{font-size:0.7rem;color:#999;margin-top:4px}
+#inputArea{display:flex;gap:0.5rem}
+textarea{flex:1;padding:0.8rem;background:#222;border:1px solid #444;border-radius:8px;color:#fff;resize:none}
+button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius:8px;cursor:pointer}
 </style>
 </head>
 <body>
-<h2>匿名私聊</h2>
+<h2>匿名私信</h2>
+<div class="tab">
+  <button id="btnGlobal">🌐 公開大廳</button>
+  <button id="btnPrivate">✉️ 我的專屬私信</button>
+</div>
 <div id="chatBox"></div>
-<div>
-<input id="msgInput" placeholder="輸入訊息...">
-<button id="sendBtn">送出</button>
+<div id="inputArea">
+  <textarea id="msgInput" placeholder="寫訊息..."></textarea>
+  <button onclick="sendMsg()">送出</button>
 </div>
 
 <script>
-// 這裡替換成你的 Supabase URL 跟 anon key
-const SUPABASE_URL = "你的SUPABASE_URL";
-const SUPABASE_KEY = "你的ANON_KEY";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 固定設定
+const GLOBAL_ROOM = "global";
+const ADMIN_PREFIX = "dm_admin_";
 
 // ========== 通知 + 提示音功能 ==========
-let notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
-let roomId = new URLSearchParams(location.search).get("room") || crypto.randomUUID();
+const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 
 async function requestNotify() {
   if (!("Notification" in window)) return false;
   const perm = await Notification.requestPermission();
   return perm === "granted";
 }
+
 function showNotify(title, body) {
-  if (Notification.permission === "granted") {
+  // 只有頁面在背景時才彈通知，當前頁面不打擾
+  if (document.hidden && Notification.permission === "granted") {
     new Notification(title, { body });
   }
+  // 提示音不分前後台都播放
   notifyAudio.play().catch(e=>{});
 }
+
+// 進頁面就詢問通知權限
 requestNotify();
 
-// ========== 載入訊息、監聽即時更新 ==========
-const chatBox = document.getElementById("chatBox");
-const msgInput = document.getElementById("msgInput");
-const sendBtn = document.getElementById("sendBtn");
+// 取得或生成本機訪客ID
+function getVisitorId(){
+  let vid = localStorage.getItem("visitor_id");
+  if(!vid){
+    vid = crypto.randomUUID();
+    localStorage.setItem("visitor_id", vid);
+  }
+  return vid;
+}
+const visitorId = getVisitorId();
+const privateRoomId = ADMIN_PREFIX + visitorId;
 
-async function loadMessages() {
-  const { data } = await supabase
+// 當前使用的 roomId
+let roomId;
+let isVisitor = true;
+let channel = null;
+
+// 切換房間函式
+function switchRoom(newRoom){
+  roomId = newRoom;
+  document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
+  document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
+  loadMsg();
+  subscribeRealtime();
+}
+
+// 監聽按鈕
+document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
+document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
+
+// 優先讀網址參數，沒有就預設切到自己的私聊房
+const urlParams = new URLSearchParams(location.search);
+const urlRoom = urlParams.get("room");
+if(urlRoom){
+  roomId = urlRoom;
+  document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
+  document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
+}else{
+  switchRoom(privateRoomId);
+}
+
+function renderChat(rows){
+  const box = document.getElementById("chatBox");
+  box.innerHTML = "";
+  rows.forEach(r=>{
+    const div = document.createElement("div");
+    div.className = "msg " + (r.is_admin ? "me" : "other");
+    div.innerHTML = `<div>${r.content}</div><div class="time">${r.created_at}</div>`;
+    box.appendChild(div);
+  })
+  box.scrollTop = box.scrollHeight;
+}
+
+async function loadMsg(){
+  const {data,error} = await sb
     .from("messages")
     .select("*")
     .eq("room_id", roomId)
-    .order("created_at", { ascending: true });
-  renderMsg(data);
-}
-function renderMsg(list) {
-  chatBox.innerHTML = "";
-  list.forEach(item=>{
-    const div = document.createElement("div");
-    div.className = item.is_self ? "msg msg-self" : "msg msg-other";
-    div.innerText = item.content;
-    chatBox.appendChild(div);
-  })
-  chatBox.scrollTop = chatBox.scrollHeight;
+    .order("created_at",{asc:true})
+  if(!error) renderChat(data);
 }
 
-// Realtime 監聽
-const channel = supabase
-.channel(`room-${roomId}`)
-.on("postgres_changes", {
-  event: "INSERT",
-  schema: "public",
-  table: "messages",
-  filter: `room_id=eq.${roomId}`
-}, (payload)=>{
-  loadMessages();
-  // 只有當前房間新訊息才通知
-  showNotify("新訊息", "對方傳來訊息了");
-})
-.subscribe();
-
-// 送出訊息
-sendBtn.onclick = async ()=>{
-  const content = msgInput.value.trim();
-  if(!content) return;
-  await supabase.from("messages").insert([{
-    room_id: roomId,
-    content: content,
-    is_self:true
-  }])
-  msgInput.value = "";
+async function sendMsg(){
+  const text = document.getElementById("msgInput").value.trim();
+  if(!text) return;
+  const {error} = await sb.from("messages").insert([
+    {room_id:roomId, content:text, is_admin:isVisitor?false:true}
+  ])
+  if(error) console.log("送出錯誤：", error);
+  document.getElementById("msgInput").value = "";
+  loadMsg();
 }
-loadMessages();
+
+// 重新綁定即時監聽
+function subscribeRealtime(){
+  if(channel) channel.unsubscribe();
+  channel = sb.channel(`room-${roomId}`)
+    .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},()=>{
+      loadMsg();
+      showNotify("新訊息", "你有一則新的匿名訊息");
+    })
+    .subscribe()
+}
+
+loadMsg();
+subscribeRealtime();
 </script>
 </body>
 </html>
