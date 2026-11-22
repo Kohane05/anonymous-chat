@@ -18,6 +18,8 @@ h2{text-align:center;margin-bottom:1rem}
 .msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.4}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
+.msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
+.visitor .msg-nick{text-align:left}
 .reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
 .reply-btn{font-size:0.7rem;background:none;border:none;color:#aaa;cursor:pointer;margin-right:0.5rem}
 .del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem;flex-shrink:0;margin-left:0.8rem}
@@ -58,6 +60,7 @@ const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const ADMIN_SENDER_ID = "admin";
+const ADMIN_NICKNAME = "管理員";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
 // 格式化時間：月-日 時:分，自動轉台北時區
@@ -105,7 +108,6 @@ function getReactionRecord(){
     return {};
   }
 }
-// 寫入本機表情紀錄
 function setReactionRecord(record){
   localStorage.setItem("reaction_record", JSON.stringify(record));
 }
@@ -258,11 +260,21 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
 
 function createMsgElement(roomId, m, allRows){
   const div = document.createElement("div");
-  // 判斷是不是管理員自己發的
-  const isMe = m.sender_id ? (m.sender_id === ADMIN_SENDER_ID) : m.is_admin;
+
+  // 左右判斷：sender_id 優先
+  let isMe;
+  if(m.sender_id && m.sender_id.trim() !== ""){
+    isMe = m.sender_id === ADMIN_SENDER_ID;
+  } else {
+    isMe = m.is_admin;
+  }
   div.className = "msg "+(isMe ? "admin" : "visitor");
   
   let inner = "";
+  // 顯示暱稱
+  const nick = m.nickname || (isMe ? ADMIN_NICKNAME : "匿名使用者");
+  inner += `<div class="msg-nick">${nick}</div>`;
+
   if(m.reply_to){
     const target = allRows ? allRows.find(x=>x.id === m.reply_to) : null;
     const quoteText = target ? target.content : "已刪除的訊息";
@@ -331,7 +343,8 @@ async function sendAdminMsg(roomId){
     room_id:roomId,
     content:txt,
     is_admin:true,
-    sender_id: ADMIN_SENDER_ID
+    sender_id: ADMIN_SENDER_ID,
+    nickname: ADMIN_NICKNAME
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   
