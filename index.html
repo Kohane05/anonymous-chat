@@ -9,9 +9,6 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
 h2{text-align:center;margin-bottom:1rem;color:#ccc}
-.nickname-bar{display:flex;justify-content:flex-end;margin-bottom:0.8rem}
-.nickname-btn{font-size:0.8rem;background:none;border:1px solid #444;color:#aaa;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer}
-.nickname-btn:hover{color:#fff;border-color:#666}
 .tab{display:flex;gap:0.5rem;margin-bottom:1rem}
 .tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
 .tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
@@ -54,9 +51,6 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
 </head>
 <body>
 <h2>匿名私信</h2>
-<div class="nickname-bar">
-  <button class="nickname-btn" onclick="editNickname()">✏️ 設定暱稱</button>
-</div>
 <div class="tab">
   <button id="btnGlobal">🌐 公開大廳</button>
   <button id="btnPrivate">✉️ 我的專屬私信</button>
@@ -83,6 +77,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const GLOBAL_ROOM = "global";
 const ADMIN_PREFIX = "dm_admin_";
+const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
 // 格式化時間：月-日 時:分，自動轉台北時區
@@ -121,7 +116,7 @@ requestNotify();
 // 回覆狀態
 let currentReplyId = null;
 
-// 訪客ID + 暱稱
+// 訪客ID + 自動分配固定編號
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
   if(!vid){
@@ -130,22 +125,20 @@ function getVisitorId(){
   }
   return vid;
 }
+
+// 依visitorId生成固定三位數編號，同一裝置永遠一樣
 function getNickname(){
-  let name = localStorage.getItem("nickname");
-  if(!name){
-    const rand = Math.random().toString(36).slice(2,6);
-    name = `匿名_${rand}`;
-    localStorage.setItem("nickname", name);
+  const vid = getVisitorId();
+  // 用雜湊算出0~999的固定編號
+  let hash = 0;
+  for(let i=0; i<vid.length; i++){
+    hash = ((hash << 5) - hash) + vid.charCodeAt(i);
+    hash |= 0;
   }
-  return name;
+  const num = Math.abs(hash) % 900 + 100;
+  return `訪客 #${num}`;
 }
-function editNickname(){
-  const oldName = getNickname();
-  const newName = prompt("輸入你的暱稱：", oldName);
-  if(newName && newName.trim()){
-    localStorage.setItem("nickname", newName.trim());
-  }
-}
+
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
@@ -211,7 +204,7 @@ function cancelReply(){
   document.getElementById("replyStatus").style.display = "none";
 }
 
-// ✅ 表情反應：樂觀更新，不跳滾動
+// 表情反應：樂觀更新，不跳滾動
 window.addReaction = async function(msgId, emoji){
   const record = getReactionRecord();
   const key = `${msgId}_${emoji}`;
@@ -293,7 +286,6 @@ function updateReactionDom(msgId, emoji, delta){
     }
   }
 
-  // 歸零後清空容器
   if(reactionsBox && reactionsBox.children.length === 0){
     reactionsBox.remove();
   }
@@ -312,9 +304,17 @@ function renderChat(rows){
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
     
-    const nick = r.nickname || "匿名使用者";
+    // 判斷暱稱：管理員固定顯示口哈內，訪客顯示自動編號
+    let nick;
+    const isAdmin = r.is_admin || r.sender_id === "admin";
+    if(isAdmin){
+      nick = ADMIN_DISPLAY_NAME;
+    } else {
+      nick = r.nickname || "匿名使用者";
+    }
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
+    // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
@@ -324,6 +324,7 @@ function renderChat(rows){
     
     div.innerHTML += `<div>${r.content}</div>`;
     
+    // 表情反應顯示
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -333,6 +334,7 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
+    // 左下角快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -340,7 +342,9 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
+    // 回覆按鈕
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
+    
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
