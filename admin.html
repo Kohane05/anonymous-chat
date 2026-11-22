@@ -149,13 +149,33 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// 表情反應
-async function addReaction(roomId, msgId, emoji){
-  const {data: row} = await sb.from("messages").select("reactions").eq("id", msgId).single();
-  const current = row.reactions || {};
-  current[emoji] = (current[emoji] || 0) + 1;
-  await sb.from("messages").update({reactions: current}).eq("id", msgId);
-  loadRoomMsg(roomId, true);
+// ✅ 修復：掛到全域 + 錯誤捕獲 + 空值相容
+window.addReaction = async function(roomId, msgId, emoji){
+  try {
+    const {data: row, error: selectErr} = await sb
+      .from("messages")
+      .select("reactions")
+      .eq("id", msgId)
+      .single();
+    
+    if(selectErr) throw selectErr;
+
+    // 相容 null、空物件
+    const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
+    current[emoji] = (current[emoji] || 0) + 1;
+
+    const {error: updateErr} = await sb
+      .from("messages")
+      .update({ reactions: current })
+      .eq("id", msgId);
+    
+    if(updateErr) throw updateErr;
+    loadRoomMsg(roomId, true);
+
+  } catch(e) {
+    console.error("表情更新失敗：", e);
+    alert("表情更新失敗，請開啟 F12 主控台查看錯誤");
+  }
 }
 
 async function loadRoomMsg(roomId, isFirstLoad = false){
