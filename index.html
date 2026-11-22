@@ -16,6 +16,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%;position:relative;line-height:1.4}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
+.msg img{max-width:100%;border-radius:6px;margin:0.4rem 0;display:block}
 .msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
 .other .msg-nick{text-align:left}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -40,8 +41,14 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem}
 .msg-reaction-bar span:hover{transform:scale(1.2)}
 
+/* 圖片預覽 */
+.image-preview{display:none;margin-bottom:0.5rem;position:relative}
+.image-preview img{max-width:120px;border-radius:6px;border:1px solid #444}
+.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
+
 #inputArea{display:flex;gap:0.5rem;align-items:flex-end}
-.emoji-btn{padding:0 0.8rem;background:#222;border:1px solid #444;color:#fff;border-radius:8px;cursor:pointer;font-size:1.1rem}
+.input-tools{display:flex;gap:0.3rem;flex-direction:column}
+.input-tools button{padding:0 0.8rem;background:#222;border:1px solid #444;color:#fff;border-radius:8px;cursor:pointer;font-size:1.1rem;height:42px}
 .emoji-panel{display:none;gap:0.4rem;padding:0.6rem;background:#1e1e1e;border:1px solid #333;border-radius:8px;margin-bottom:0.5rem;flex-wrap:wrap}
 .emoji-panel span{font-size:1.3rem;cursor:pointer;padding:0.2rem 0.4rem;border-radius:4px}
 .emoji-panel span:hover{background:#2a2a2a}
@@ -64,8 +71,16 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
   <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
   <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
 </div>
+<div class="image-preview" id="imagePreview">
+  <img id="previewImg">
+  <span onclick="clearImage()">✕</span>
+</div>
 <div id="inputArea">
-  <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
+  <div class="input-tools">
+    <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
+    <button onclick="document.getElementById('imageInput').click()">📎</button>
+    <input type="file" id="imageInput" accept="image/*" style="display:none">
+  </div>
   <textarea id="msgInput" placeholder="寫訊息..."></textarea>
   <button onclick="sendMsg()">送出</button>
 </div>
@@ -77,8 +92,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const GLOBAL_ROOM = "global";
 const ADMIN_PREFIX = "dm_admin_";
-const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
+const ADMIN_DISPLAY_NAME = "口哈內";
 
 // 格式化時間：月-日 時:分，自動轉台北時區
 function formatTime(isoString){
@@ -115,8 +130,9 @@ requestNotify();
 
 // 回覆狀態
 let currentReplyId = null;
+let currentImage = null;
 
-// 訪客ID + 自動分配固定編號
+// 訪客ID + 自動編號
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
   if(!vid){
@@ -125,11 +141,8 @@ function getVisitorId(){
   }
   return vid;
 }
-
-// 依visitorId生成固定三位數編號，同一裝置永遠一樣
 function getNickname(){
   const vid = getVisitorId();
-  // 用雜湊算出0~999的固定編號
   let hash = 0;
   for(let i=0; i<vid.length; i++){
     hash = ((hash << 5) - hash) + vid.charCodeAt(i);
@@ -138,7 +151,6 @@ function getNickname(){
   const num = Math.abs(hash) % 900 + 100;
   return `訪客 #${num}`;
 }
-
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
@@ -160,6 +172,7 @@ function setReactionRecord(record){
 function switchRoom(newRoom){
   roomId = newRoom;
   cancelReply();
+  clearImage();
   document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
   loadMsg();
@@ -192,6 +205,40 @@ document.querySelectorAll("#emojiPanel span").forEach(el=>{
   }
 })
 
+// 圖片上傳 + 壓縮
+document.getElementById("imageInput").onchange = async function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  
+  // 壓縮圖片
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await new Promise(r=>img.onload = r);
+  
+  const maxWidth = 800;
+  let w = img.width, h = img.height;
+  if(w > maxWidth){
+    h = h * maxWidth / w;
+    w = maxWidth;
+  }
+  
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+  
+  currentImage = canvas.toDataURL("image/jpeg", 0.8);
+  document.getElementById("previewImg").src = currentImage;
+  document.getElementById("imagePreview").style.display = "block";
+  e.target.value = "";
+}
+
+function clearImage(){
+  currentImage = null;
+  document.getElementById("imagePreview").style.display = "none";
+  document.getElementById("previewImg").src = "";
+}
+
 // 回覆功能
 function setReply(msgId, content){
   currentReplyId = msgId;
@@ -206,23 +253,16 @@ function cancelReply(){
 
 // 表情反應：樂觀更新，不跳滾動
 window.addReaction = async function(msgId, emoji){
-  const record = getReactionRecord();
-  const key = `${msgId}_${emoji}`;
-  const hasReacted = !!record[key];
-
-  // 樂觀更新：先改 DOM
-  updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
-
-  // 更新本機紀錄
-  if(hasReacted){
-    delete record[key];
-  }else{
-    record[key] = true;
-  }
-  setReactionRecord(record);
-
-  // 背景同步資料庫
   try {
+    const record = getReactionRecord();
+    const key = `${msgId}_${emoji}`;
+    const hasReacted = !!record[key];
+
+    updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
+    if(hasReacted) delete record[key];
+    else record[key] = true;
+    setReactionRecord(record);
+
     const {data: row, error: selectErr} = await sb
       .from("messages")
       .select("reactions")
@@ -239,27 +279,21 @@ window.addReaction = async function(msgId, emoji){
       .update({ reactions: current })
       .eq("id", msgId);
     if(updateErr) throw updateErr;
+
   } catch(e) {
-    console.error("表情同步失敗：", e);
-    // 失敗就復原 DOM
+    console.error("表情更新失敗：", e);
     updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted){
-      record[key] = true;
-    }else{
-      delete record[key];
-    }
+    if(hasReacted) record[key] = true;
+    else delete record[key];
     setReactionRecord(record);
   }
 }
 
-// 局部更新單則訊息的表情
 function updateReactionDom(msgId, emoji, delta){
   const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
   if(!msgEl) return;
-
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -285,10 +319,7 @@ function updateReactionDom(msgId, emoji, delta){
       reactionsBox.appendChild(span);
     }
   }
-
-  if(reactionsBox && reactionsBox.children.length === 0){
-    reactionsBox.remove();
-  }
+  if(reactionsBox && reactionsBox.children.length === 0) reactionsBox.remove();
 }
 
 function renderChat(rows){
@@ -304,14 +335,9 @@ function renderChat(rows){
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
     
-    // 判斷暱稱：管理員固定顯示口哈內，訪客顯示自動編號
-    let nick;
+    // 顯示暱稱
     const isAdmin = r.is_admin || r.sender_id === "admin";
-    if(isAdmin){
-      nick = ADMIN_DISPLAY_NAME;
-    } else {
-      nick = r.nickname || "匿名使用者";
-    }
+    const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
     // 回覆引用
@@ -321,10 +347,17 @@ function renderChat(rows){
       const short = quoteText.length > 20 ? quoteText.slice(0,20)+"..." : quoteText;
       div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
     }
+
+    // 圖片
+    if(r.image){
+      div.innerHTML += `<img src="${r.image}" alt="圖片">`;
+    }
     
-    div.innerHTML += `<div>${r.content}</div>`;
+    if(r.content){
+      div.innerHTML += `<div>${r.content}</div>`;
+    }
     
-    // 表情反應顯示
+    // 表情反應
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -334,7 +367,7 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
-    // 左下角快捷表情列
+    // 快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -343,7 +376,7 @@ function renderChat(rows){
     div.innerHTML += barHtml;
 
     // 回覆按鈕
-    div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
+    div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content ? r.content.replace(/'/g,"\\'") : "圖片"}')">回覆</button>`;
     
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
@@ -362,7 +395,7 @@ async function loadMsg(){
 
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
-  if(!text) return;
+  if(!text && !currentImage) return;
   
   const payload = {
     room_id:roomId,
@@ -372,12 +405,14 @@ async function sendMsg(){
     nickname: getNickname()
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
+  if(currentImage) payload.image = currentImage;
   
   const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：", error);
   
   document.getElementById("msgInput").value = "";
   cancelReply();
+  clearImage();
 }
 
 function subscribeRealtime(){
@@ -388,7 +423,6 @@ function subscribeRealtime(){
         loadMsg();
         showNotify("新訊息", "你有一則新的匿名訊息");
       } else if(payload.eventType === "UPDATE"){
-        // UPDATE 只局部更新表情，不重繪、不跳動
         const newRow = payload.new;
         updateReactionDomFull(newRow.id, newRow.reactions);
       }
@@ -396,11 +430,9 @@ function subscribeRealtime(){
     .subscribe()
 }
 
-// 用完整 reactions 物件更新單則訊息
 function updateReactionDomFull(msgId, reactions){
   const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
   if(!msgEl) return;
-
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   if(!reactionsBox){
     reactionsBox = document.createElement("div");
@@ -408,7 +440,6 @@ function updateReactionDomFull(msgId, reactions){
     const timeEl = msgEl.querySelector(".time");
     timeEl.parentNode.insertBefore(reactionsBox, timeEl);
   }
-
   reactionsBox.innerHTML = "";
   if(reactions && Object.keys(reactions).length > 0){
     Object.entries(reactions).forEach(([emoji, count])=>{
