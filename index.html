@@ -13,11 +13,20 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
 .tab button.active{background:#3670b9;border-color:#3670b9;color:#fff}
 #chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
-.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%}
+.msg{margin:0.6rem 0;padding:0.7rem;border-radius:8px;max-width:80%;position:relative}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
+.reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8}
 .time{font-size:0.7rem;color:#999;margin-top:4px}
-#inputArea{display:flex;gap:0.5rem}
+.reply-btn{font-size:0.7rem;background:none;border:none;color:#888;cursor:pointer;padding:0 0.3rem}
+.reply-btn:hover{color:#fff}
+.reply-status{font-size:0.8rem;color:#8ab4f8;margin-bottom:0.5rem;display:none}
+.reply-status span{cursor:pointer;color:#aaa;margin-left:0.5rem}
+#inputArea{display:flex;gap:0.5rem;align-items:flex-end}
+.emoji-btn{padding:0 0.8rem;background:#222;border:1px solid #444;color:#fff;border-radius:8px;cursor:pointer;font-size:1.1rem}
+.emoji-panel{display:none;gap:0.4rem;padding:0.6rem;background:#1e1e1e;border:1px solid #333;border-radius:8px;margin-bottom:0.5rem;flex-wrap:wrap}
+.emoji-panel span{font-size:1.3rem;cursor:pointer;padding:0.2rem 0.4rem;border-radius:4px}
+.emoji-panel span:hover{background:#2a2a2a}
 textarea{flex:1;padding:0.8rem;background:#222;border:1px solid #444;border-radius:8px;color:#fff;resize:none}
 button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius:8px;cursor:pointer}
 </style>
@@ -29,7 +38,16 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
   <button id="btnPrivate">✉️ 我的專屬私信</button>
 </div>
 <div id="chatBox"></div>
+<div class="reply-status" id="replyStatus">
+  回覆：<span id="replyText"></span>
+  <span onclick="cancelReply()">✕</span>
+</div>
+<div class="emoji-panel" id="emojiPanel">
+  <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
+  <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
+</div>
 <div id="inputArea">
+  <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
   <textarea id="msgInput" placeholder="寫訊息..."></textarea>
   <button onclick="sendMsg()">送出</button>
 </div>
@@ -39,32 +57,27 @@ const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 固定設定
 const GLOBAL_ROOM = "global";
 const ADMIN_PREFIX = "dm_admin_";
 
-// ========== 通知 + 提示音功能 ==========
+// 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
-
 async function requestNotify() {
   if (!("Notification" in window)) return false;
   const perm = await Notification.requestPermission();
   return perm === "granted";
 }
-
 function showNotify(title, body) {
-  // 只有頁面在背景時才彈通知，當前頁面不打擾
   if (document.hidden && Notification.permission === "granted") {
     new Notification(title, { body });
   }
-  // 提示音不分前後台都播放
   notifyAudio.play().catch(e=>{});
 }
-
-// 進頁面就詢問通知權限
 requestNotify();
 
-// 取得或生成本機訪客ID
+// 回覆狀態
+let currentReplyId = null;
+
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
   if(!vid){
@@ -76,25 +89,22 @@ function getVisitorId(){
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
-// 當前使用的 roomId
 let roomId;
 let isVisitor = true;
 let channel = null;
 
-// 切換房間函式
 function switchRoom(newRoom){
   roomId = newRoom;
+  cancelReply();
   document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
   loadMsg();
   subscribeRealtime();
 }
 
-// 監聽按鈕
 document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
 document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
 
-// 優先讀網址參數，沒有就預設切到自己的私聊房
 const urlParams = new URLSearchParams(location.search);
 const urlRoom = urlParams.get("room");
 if(urlRoom){
@@ -105,13 +115,54 @@ if(urlRoom){
   switchRoom(privateRoomId);
 }
 
+// 表情面板
+function toggleEmoji(){
+  const panel = document.getElementById("emojiPanel");
+  panel.style.display = panel.style.display === "flex" ? "none" : "flex";
+}
+document.querySelectorAll("#emojiPanel span").forEach(el=>{
+  el.onclick = ()=>{
+    const input = document.getElementById("msgInput");
+    input.value += el.innerText;
+    input.focus();
+  }
+})
+
+// 回覆功能
+function setReply(msgId, content){
+  currentReplyId = msgId;
+  document.getElementById("replyText").innerText = content.length > 20 ? content.slice(0,20)+"..." : content;
+  document.getElementById("replyStatus").style.display = "block";
+  document.getElementById("msgInput").focus();
+}
+function cancelReply(){
+  currentReplyId = null;
+  document.getElementById("replyStatus").style.display = "none";
+}
+
 function renderChat(rows){
   const box = document.getElementById("chatBox");
   box.innerHTML = "";
   rows.forEach(r=>{
     const div = document.createElement("div");
     div.className = "msg " + (r.is_admin ? "me" : "other");
-    div.innerHTML = `<div>${r.content}</div><div class="time">${r.created_at}</div>`;
+    
+    // 回覆引用
+    if(r.reply_to){
+      const target = rows.find(x=>x.id === r.reply_to);
+      const quoteText = target ? target.content : "已刪除的訊息";
+      const short = quoteText.length > 20 ? quoteText.slice(0,20)+"..." : quoteText;
+      div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
+    }
+    
+    div.innerHTML += `<div>${r.content}</div>`;
+    
+    // 回覆按鈕
+    if(!r.is_admin || !isVisitor){
+      div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
+    }
+    
+    div.innerHTML += `<div class="time">${r.created_at}</div>`;
     box.appendChild(div);
   })
   box.scrollTop = box.scrollHeight;
@@ -129,15 +180,22 @@ async function loadMsg(){
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
   if(!text) return;
-  const {error} = await sb.from("messages").insert([
-    {room_id:roomId, content:text, is_admin:isVisitor?false:true}
-  ])
+  
+  const payload = {
+    room_id:roomId,
+    content:text,
+    is_admin:isVisitor?false:true
+  };
+  if(currentReplyId) payload.reply_to = currentReplyId;
+  
+  const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：", error);
+  
   document.getElementById("msgInput").value = "";
+  cancelReply();
   loadMsg();
 }
 
-// 重新綁定即時監聽
 function subscribeRealtime(){
   if(channel) channel.unsubscribe();
   channel = sb.channel(`room-${roomId}`)
