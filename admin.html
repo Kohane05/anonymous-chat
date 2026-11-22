@@ -9,13 +9,19 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
 body{background:#111;color:#eee;padding:1rem;max-width:900px;margin:0 auto}
 h2{text-align:center;margin-bottom:1rem}
-.room{border:1px solid #333;border-radius:8px;padding:1rem;margin-bottom:1rem;background:#181818}
-.room-id{color:#888;font-size:0.8rem;margin-bottom:0.5rem}
-.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;display:flex;justify-content:space-between}
+.room{border:1px solid #333;border-radius:8px;margin-bottom:1rem;background:#181818;overflow:hidden}
+.room-header{padding:0.8rem 1rem;background:#1f1f1f;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.room-id{color:#888;font-size:0.85rem}
+.room-toggle{color:#666;font-size:1.2rem}
+.room-body{padding:0 1rem 1rem;display:block}
+.msg-list{height:300px;overflow-y:auto;padding-right:0.5rem;margin:0.8rem 0;border-bottom:1px solid #252525}
+.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;display:flex;justify-content:space-between;word-break:break-word}
 .visitor{background:#272727}
 .admin{background:#203b58}
-.del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem}
-.reply-area{margin-top:0.6rem;display:flex;gap:0.5rem}
+.del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem;flex-shrink:0;margin-left:0.8rem}
+.load-more{width:100%;padding:0.4rem;background:#222;border:1px solid #333;color:#aaa;border-radius:4px;cursor:pointer;margin-bottom:0.6rem;font-size:0.8rem}
+.load-more:hover{background:#2a2a2a}
+.reply-area{display:flex;gap:0.5rem}
 textarea{flex:1;padding:0.6rem;background:#222;border:1px solid #444;border-radius:6px;color:#fff;resize:none}
 button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius:6px;cursor:pointer}
 </style>
@@ -44,57 +50,135 @@ function showNotify(title, body) {
   }
   notifyAudio.play().catch(e=>{});
 }
-
 requestNotify();
 
+// 每個房間已載入的最早時間，用於分頁載入更早訊息
+const roomOldestTime = {};
+const PAGE_SIZE = 30;
+
 async function loadAllRooms(){
-  const {data,error}=await sb
+  // 先取得所有不重複的 room_id
+  const {data:allMsg, error} = await sb
     .from("messages")
-    .select("*")
-    .order("created_at",{asc:true})
+    .select("room_id, created_at")
+    .order("created_at",{asc:false})
+  
   if(error) {
     console.log("載入錯誤：", error);
     return;
   }
-  const groups = {};
-  data.forEach(m=>{
-    if(!groups[m.room_id]) groups[m.room_id]=[];
-    groups[m.room_id].push(m);
-  })
+
+  // 去除重複房間
+  const roomIds = [...new Set(allMsg.map(m=>m.room_id))];
   const box = document.getElementById("container");
   box.innerHTML = "";
-  Object.keys(groups).forEach(roomId=>{
+
+  for(const roomId of roomIds){
     const roomDiv = document.createElement("div");
-    roomDiv.className="room";
-    roomDiv.innerHTML = `<div class="room-id">房間ID：${roomId}</div><div class="msg-list" id="r-${roomId}"></div>
-    <div class="reply-area">
-      <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
-      <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
-    </div>`
+    roomDiv.className = "room";
+    roomDiv.innerHTML = `
+      <div class="room-header" onclick="toggleRoom('${roomId}')">
+        <div class="room-id">房間ID：${roomId}</div>
+        <div class="room-toggle" id="toggle-${roomId}">−</div>
+      </div>
+      <div class="room-body" id="body-${roomId}">
+        <button class="load-more" onclick="loadMoreMsg('${roomId}')">載入更早訊息</button>
+        <div class="msg-list" id="r-${roomId}"></div>
+        <div class="reply-area">
+          <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
+          <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
+        </div>
+      </div>`
     box.appendChild(roomDiv);
-    renderRoomMsg(roomId, groups[roomId]);
-  })
+
+    // 初始載入每個房間最新 N 條
+    await loadRoomMsg(roomId, true);
+  }
+}
+
+// 載入單個房間的訊息
+async function loadRoomMsg(roomId, isFirstLoad = false){
+  let query = sb
+    .from("messages")
+    .select("*")
+    .eq("room_id", roomId)
+    .order("created_at",{asc:false})
+    .limit(PAGE_SIZE);
+
+  // 如果不是第一次載入，就只抓比目前最早時間還早的訊息
+  if(!isFirstLoad && roomOldestTime[roomId]){
+    query = query.lt("created_at", roomOldestTime[roomId]);
+  }
+
+  const {data, error} = await query;
+  if(error) return;
+
+  // 紀錄這批最早的時間
+  if(data.length > 0){
+    roomOldestTime[roomId] = data.at(-1).created_at;
+  }
+
+  // 舊訊息插在前面，新訊息加在後面
+  const listEl = document.getElementById(`r-${roomId}`);
+  const reversed = [...data].reverse(); // 轉成舊到新
+
+  if(isFirstLoad){
+    renderRoomMsg(roomId, reversed);
+  }else{
+    // 插入到開頭
+    const fragment = document.createDocumentFragment();
+    reversed.forEach(m=>{
+      const div = createMsgElement(roomId, m);
+      fragment.appendChild(div);
+    })
+    listEl.insertBefore(fragment, listEl.firstChild);
+  }
+}
+
+function createMsgElement(roomId, m){
+  const div = document.createElement("div");
+  div.className = "msg "+(m.is_admin?"admin":"visitor");
+  div.innerHTML = `<span>${m.content}<br><small>${m.created_at}</small></span>
+  <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>`
+  return div;
 }
 
 function renderRoomMsg(roomId, list){
   const el = document.getElementById(`r-${roomId}`);
   el.innerHTML = "";
   list.forEach(m=>{
-    const div = document.createElement("div");
-    div.className = "msg "+(m.is_admin?"admin":"visitor");
-    div.innerHTML = `<span>${m.content}<br><small>${m.created_at}</small></span>
-    <button class="del-btn" onclick="delMsg(${m.id})">刪除</button>`
-    el.appendChild(div);
+    el.appendChild(createMsgElement(roomId, m));
   })
+  // 預設滾到最底部（最新訊息）
+  el.scrollTop = el.scrollHeight;
 }
 
-async function delMsg(id){
+// 載入更早訊息
+async function loadMoreMsg(roomId){
+  await loadRoomMsg(roomId, false);
+}
+
+// 折疊/展開房間
+function toggleRoom(roomId){
+  const body = document.getElementById(`body-${roomId}`);
+  const toggle = document.getElementById(`toggle-${roomId}`);
+  if(body.style.display === "none"){
+    body.style.display = "block";
+    toggle.innerText = "−";
+  }else{
+    body.style.display = "none";
+    toggle.innerText = "+";
+  }
+}
+
+async function delMsg(roomId, id){
   const {error} = await sb.from("messages").delete().eq("id",id);
   if(error) {
     console.log("刪除錯誤：",error);
     return;
   }
-  loadAllRooms();
+  // 刪除成功重新載入這個房間
+  await loadRoomMsg(roomId, true);
 }
 
 async function sendAdminMsg(roomId){
@@ -103,14 +187,24 @@ async function sendAdminMsg(roomId){
   const {error} = await sb.from("messages").insert([{room_id:roomId, content:txt, is_admin:true}])
   if(error) console.log("送出錯誤：",error);
   document.getElementById(`rep-${roomId}`).value="";
-  loadAllRooms();
+  // 送出後重新載入這個房間最新
+  setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
-// 即時監聽全部訊息，有新的就通知
+// 即時監聽全部訊息，有新的就通知並更新對應房間
 sb.channel("all")
-  .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},()=>{
-    loadAllRooms();
-    showNotify("有新匿名訊息", "某個聊天室收到新訊息了");
+  .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
+    const newMsg = payload.new;
+    showNotify("有新匿名訊息", `房間 ${newMsg.room_id} 收到新訊息`);
+    
+    // 如果該房間已存在，就自動重新載入最新
+    const roomEl = document.getElementById(`r-${newMsg.room_id}`);
+    if(roomEl){
+      loadRoomMsg(newMsg.room_id, true);
+    }else{
+      // 新房間就全部重繪
+      loadAllRooms();
+    }
   })
   .subscribe()
 
