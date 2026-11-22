@@ -75,6 +75,16 @@ const GLOBAL_ROOM = "global";
 const ADMIN_PREFIX = "dm_admin_";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// 格式化時間：月-日 時:分，自動轉本地時區
+function formatTime(isoString){
+  const date = new Date(isoString);
+  const m = String(date.getMonth()+1).padStart(2,'0');
+  const d = String(date.getDate()).padStart(2,'0');
+  const hh = String(date.getHours()).padStart(2,'0');
+  const mm = String(date.getMinutes()).padStart(2,'0');
+  return `${m}-${d} ${hh}:${mm}`;
+}
+
 // 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
@@ -250,7 +260,8 @@ function renderChat(rows){
     // 回覆按鈕
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${r.content.replace(/'/g,"\\'")}')">回覆</button>`;
     
-    div.innerHTML += `<div class="time">${r.created_at}</div>`;
+    // 格式化後的時間
+    div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
   box.scrollTop = box.scrollHeight;
