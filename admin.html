@@ -60,7 +60,7 @@ const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const ADMIN_SENDER_ID = "admin";
-const ADMIN_NICKNAME = "管理員";
+const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
 // 格式化時間：月-日 時:分，自動轉台北時區
@@ -79,6 +79,18 @@ function formatTime(isoString){
     hour12: false
   });
   return fmt.format(date).replace(/\//g, '-');
+}
+
+// 依 sender_id 生成固定三位數編號，前後台一致
+function getVisitorNick(senderId){
+  if(!senderId || senderId.trim() === "") return "匿名訪客";
+  let hash = 0;
+  for(let i=0; i<senderId.length; i++){
+    hash = ((hash << 5) - hash) + senderId.charCodeAt(i);
+    hash |= 0;
+  }
+  const num = Math.abs(hash) % 900 + 100;
+  return `訪客 #${num}`;
 }
 
 // 通知 + 提示音
@@ -185,7 +197,7 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// ✅ 表情反應：樂觀更新，不跳動
+// 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
   const record = getReactionRecord();
   const key = `${msgId}_${emoji}`;
@@ -317,7 +329,8 @@ function createMsgElement(roomId, m, allRows){
   div.dataset.id = m.id;
   
   let inner = "";
-  const nick = m.nickname || (isMe ? ADMIN_NICKNAME : "匿名使用者");
+  // 顯示暱稱：管理員固定口哈內，訪客用自動編號
+  const nick = isMe ? ADMIN_NICKNAME : getVisitorNick(m.sender_id);
   inner += `<div class="msg-nick">${nick}</div>`;
 
   if(m.reply_to){
@@ -329,6 +342,7 @@ function createMsgElement(roomId, m, allRows){
   
   inner += `<span>${m.content}<br><small>${formatTime(m.created_at)}</small>`;
   
+  // 表情反應顯示
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -338,6 +352,7 @@ function createMsgElement(roomId, m, allRows){
   }
   inner += `</span>`;
 
+  // 快捷表情列
   inner += '<span><div class="msg-reaction-bar">';
   QUICK_EMOJIS.forEach(e=>{
     inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
