@@ -21,6 +21,18 @@ h2{text-align:center;margin-bottom:1rem}
 .reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8}
 .reply-btn{font-size:0.7rem;background:none;border:none;color:#aaa;cursor:pointer;margin-right:0.5rem}
 .del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem;flex-shrink:0;margin-left:0.8rem}
+
+/* 表情反應 */
+.msg-reactions{display:flex;gap:0.3rem;margin-top:0.3rem;flex-wrap:wrap}
+.reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:0.1rem 0.4rem;font-size:0.8rem;cursor:pointer}
+.msg-reaction-bar{
+  position:absolute;bottom:-12px;left:6px;
+  display:none;gap:0.2rem;background:#1a1a1a;
+  border:1px solid #333;border-radius:20px;padding:0.15rem 0.4rem;z-index:10
+}
+.msg:hover .msg-reaction-bar{display:flex}
+.msg-reaction-bar span{cursor:pointer;font-size:0.85rem;padding:0 0.15rem}
+
 .load-more{width:100%;padding:0.4rem;background:#222;border:1px solid #333;color:#aaa;border-radius:4px;cursor:pointer;margin-bottom:0.6rem;font-size:0.8rem}
 .load-more:hover{background:#2a2a2a}
 .reply-status{font-size:0.75rem;color:#8ab4f8;margin-bottom:0.4rem;display:none}
@@ -42,6 +54,8 @@ button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius
 const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
 // 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
@@ -104,7 +118,6 @@ async function loadAllRooms(){
       </div>`
     box.appendChild(roomDiv);
 
-    // 綁定表情點擊
     setTimeout(()=>{
       document.querySelectorAll(`#emojiPanel-${roomId} span`).forEach(el=>{
         el.onclick = ()=>{
@@ -136,13 +149,21 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// 載入單個房間的訊息（舊到新，最新在底部）
+// 表情反應
+async function addReaction(roomId, msgId, emoji){
+  const {data: row} = await sb.from("messages").select("reactions").eq("id", msgId).single();
+  const current = row.reactions || {};
+  current[emoji] = (current[emoji] || 0) + 1;
+  await sb.from("messages").update({reactions: current}).eq("id", msgId);
+  loadRoomMsg(roomId, true);
+}
+
 async function loadRoomMsg(roomId, isFirstLoad = false){
   let query = sb
     .from("messages")
     .select("*")
     .eq("room_id", roomId)
-    .order("created_at",{asc:true}) // 時間正序：舊在上、新在下
+    .order("created_at",{asc:true})
     .limit(PAGE_SIZE);
 
   if(!isFirstLoad && roomOldestTime[roomId]){
@@ -156,22 +177,15 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
 
   if(isFirstLoad){
     listEl.innerHTML = "";
-    if(data.length > 0){
-      roomOldestTime[roomId] = data[0].created_at;
-    }
+    if(data.length > 0) roomOldestTime[roomId] = data[0].created_at;
     data.forEach(m=>listEl.appendChild(createMsgElement(roomId, m, data)))
-    // 預設滾到最底部（最新訊息）
     listEl.scrollTop = listEl.scrollHeight;
   }else{
-    // 更早的訊息插入到最頂部
-    if(data.length > 0){
-      roomOldestTime[roomId] = data[0].created_at;
-    }
+    if(data.length > 0) roomOldestTime[roomId] = data[0].created_at;
     const beforeHeight = listEl.scrollHeight;
     const fragment = document.createDocumentFragment();
     data.forEach(m=>fragment.appendChild(createMsgElement(roomId, m, data)))
     listEl.insertBefore(fragment, listEl.firstChild);
-    // 保持滾動位置不跳動
     listEl.scrollTop += listEl.scrollHeight - beforeHeight;
   }
 }
@@ -181,7 +195,6 @@ function createMsgElement(roomId, m, allRows){
   div.className = "msg "+(m.is_admin?"admin":"visitor");
   
   let inner = "";
-  // 回覆引用
   if(m.reply_to){
     const target = allRows ? allRows.find(x=>x.id === m.reply_to) : null;
     const quoteText = target ? target.content : "已刪除的訊息";
@@ -189,8 +202,26 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
   
-  inner += `<span>${m.content}<br><small>${m.created_at}</small></span>`;
-  inner += `<span>
+  inner += `<span>${m.content}<br><small>${m.created_at}</small>`;
+  
+  // 表情反應顯示
+  if(m.reactions && Object.keys(m.reactions).length > 0){
+    inner += '<div class="msg-reactions">';
+    Object.entries(m.reactions).forEach(([emoji, count])=>{
+      inner += `<span class="reaction-item" onclick="addReaction('${roomId}', ${m.id}, '${emoji}')">${emoji} ${count}</span>`;
+    })
+    inner += '</div>';
+  }
+  inner += `</span>`;
+
+  // 快捷表情列
+  inner += '<span><div class="msg-reaction-bar">';
+  QUICK_EMOJIS.forEach(e=>{
+    inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
+  })
+  inner += '</div>';
+
+  inner += `
     <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${m.content.replace(/'/g,"\\'")}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
   </span>`;
@@ -239,12 +270,12 @@ async function sendAdminMsg(roomId){
   setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
-// 即時監聽：新訊息自動追加在底部，並滾到底
 sb.channel("all")
-  .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
+  .on("postgres_changes",{event:"*",schema:"public",table:"messages"},(payload)=>{
     const newMsg = payload.new;
-    showNotify("有新匿名訊息", `房間 ${newMsg.room_id} 收到新訊息`);
-    
+    if(payload.eventType === "INSERT"){
+      showNotify("有新匿名訊息", `房間 ${newMsg.room_id} 收到新訊息`);
+    }
     const listEl = document.getElementById(`r-${newMsg.room_id}`);
     if(listEl){
       loadRoomMsg(newMsg.room_id, true);
