@@ -26,7 +26,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .reply-status{font-size:0.8rem;color:#8ab4f8;margin-bottom:0.5rem;display:none}
 .reply-status span{cursor:pointer;color:#aaa;margin-left:0.5rem}
 
-/* 表情反應樣式 */
+/* 表情反應 */
 .msg-reactions{display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap;justify-content:flex-end}
 .other .msg-reactions{justify-content:flex-start}
 .reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:0.15rem 0.5rem;font-size:0.85rem;cursor:pointer}
@@ -95,20 +95,17 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ✅ 最終穩定版：強制統一 UTC 解析，轉台北時區
+// ⏰ 時間偏移設定：顯示太快就調小，太慢就調大
+const TIME_OFFSET_HOURS = 4;
+
 function formatTime(isoString){
-  let str = String(isoString).trim().replace(/\s+/g, 'T');
-  // 移除所有舊的時區標記，統一強制當 UTC 處理
-  str = str.replace(/[+-]\d{2}(:?\d{2})?$/, '');
-  if(!str.endsWith('Z')) str += 'Z';
-  
-  const date = new Date(str);
-  return date.toLocaleString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    hour12: false
-  }).replace(/\//g, '-');
+  const date = new Date(isoString);
+  const tw = new Date(date.getTime() + TIME_OFFSET_HOURS * 60 * 60 * 1000);
+  const m = String(tw.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(tw.getUTCDate()).padStart(2, '0');
+  const hh = String(tw.getUTCHours()).padStart(2, '0');
+  const mm = String(tw.getUTCMinutes()).padStart(2, '0');
+  return `${m}-${d} ${hh}:${mm}`;
 }
 
 // 通知 + 提示音
@@ -122,7 +119,7 @@ function showNotify(title, body) {
   if (document.hidden && Notification.permission === "granted") {
     new Notification(title, { body });
   }
-  notifyAudio.play().catch(e=>{});
+  notifyAudio.play().catch(()=>{});
 }
 requestNotify();
 
@@ -197,9 +194,8 @@ function toggleEmoji(){
 }
 document.querySelectorAll("#emojiPanel span").forEach(el=>{
   el.onclick = ()=>{
-    const input = document.getElementById("msgInput");
-    input.value += el.innerText;
-    input.focus();
+    document.getElementById("msgInput").value += el.innerText;
+    document.getElementById("msgInput").focus();
   }
 })
 
@@ -254,18 +250,11 @@ window.addReaction = async function(msgId, emoji){
   const key = `${msgId}_${emoji}`;
   const hasReacted = !!record[key];
 
-  // 樂觀更新 DOM
   updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
-
-  // 更新本機紀錄
-  if(hasReacted){
-    delete record[key];
-  }else{
-    record[key] = true;
-  }
+  if(hasReacted) delete record[key];
+  else record[key] = true;
   setReactionRecord(record);
 
-  // 背景同步資料庫
   try {
     const {data: row, error: selectErr} = await sb
       .from("messages")
@@ -288,13 +277,9 @@ window.addReaction = async function(msgId, emoji){
 
   } catch(e) {
     console.error("表情同步失敗：", e);
-    // 失敗復原 DOM
     updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted){
-      record[key] = true;
-    }else{
-      delete record[key];
-    }
+    if(hasReacted) record[key] = true;
+    else delete record[key];
     setReactionRecord(record);
   }
 }
@@ -306,7 +291,6 @@ function updateReactionDom(msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -332,10 +316,7 @@ function updateReactionDom(msgId, emoji, delta){
       reactionsBox.appendChild(span);
     }
   }
-
-  if(reactionsBox && reactionsBox.children.length === 0){
-    reactionsBox.remove();
-  }
+  if(reactionsBox && reactionsBox.children.length === 0) reactionsBox.remove();
 }
 
 function renderChat(rows){
@@ -344,7 +325,6 @@ function renderChat(rows){
   rows.forEach(r=>{
     const div = document.createElement("div");
 
-    // 左右判斷：sender_id 優先
     let isMe = false;
     if(r.sender_id && r.sender_id.trim() !== ""){
       isMe = r.sender_id === visitorId;
@@ -352,12 +332,10 @@ function renderChat(rows){
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
     
-    // 顯示暱稱：管理員固定口哈內
     const isAdmin = r.is_admin || r.sender_id === "admin";
     const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
-    // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
@@ -365,7 +343,6 @@ function renderChat(rows){
       div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
     }
 
-    // 圖片
     if(r.image){
       div.innerHTML += `<img src="${r.image}" alt="圖片">`;
     }
@@ -374,7 +351,6 @@ function renderChat(rows){
       div.innerHTML += `<div>${r.content}</div>`;
     }
     
-    // 表情反應顯示
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -384,7 +360,6 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
-    // 快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -392,7 +367,6 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
-    // 回覆按鈕
     const replyText = r.content ? r.content.replace(/'/g,"\\'") : "圖片";
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
     
@@ -407,7 +381,7 @@ async function loadMsg(){
     .from("messages")
     .select("*")
     .eq("room_id", roomId)
-    .order("created_at",{asc:true})
+    .order("created_at",{ascending:true})
   if(!error) renderChat(data);
 }
 
@@ -441,7 +415,6 @@ function subscribeRealtime(){
         loadMsg();
         showNotify("新訊息", "你有一則新的匿名訊息");
       } else if(payload.eventType === "UPDATE"){
-        // UPDATE 只局部更新表情，不重繪、不跳動
         const newRow = payload.new;
         updateReactionDomFull(newRow.id, newRow.reactions);
       }
@@ -449,7 +422,6 @@ function subscribeRealtime(){
     .subscribe()
 }
 
-// 用完整 reactions 物件更新單則訊息
 function updateReactionDomFull(msgId, reactions){
   const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
   if(!msgEl) return;
