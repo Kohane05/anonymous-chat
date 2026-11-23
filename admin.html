@@ -67,8 +67,8 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ⏰ 時間偏移設定：顯示太快就調小，太慢就調大
-const TIME_OFFSET_HOURS = 4;
+// ⏰ 時間偏移調整：顯示太快就調小，太慢就調大，可設負數
+const TIME_OFFSET_HOURS = 0;
 
 function formatTime(isoString){
   const date = new Date(isoString);
@@ -363,12 +363,14 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
 
+  // 圖片
   if(m.image){
     inner += `<img src="${m.image}" alt="圖片">`;
   }
   
   inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
   
+  // 表情反應
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -378,6 +380,7 @@ function createMsgElement(roomId, m, allRows){
   }
   inner += `</span>`;
 
+  // 快捷表情列
   inner += '<span><div class="msg-reaction-bar">';
   QUICK_EMOJIS.forEach(e=>{
     inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
