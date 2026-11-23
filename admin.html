@@ -67,16 +67,13 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ⏰ 時間偏移調整：顯示太快就調小，太慢就調大，可設負數
-const TIME_OFFSET_HOURS = 0;
-
+// ✅ 最終穩定版：瀏覽器自動轉本地時區（台灣 UTC+8）
 function formatTime(isoString){
   const date = new Date(isoString);
-  const tw = new Date(date.getTime() + TIME_OFFSET_HOURS * 60 * 60 * 1000);
-  const m = String(tw.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(tw.getUTCDate()).padStart(2, '0');
-  const hh = String(tw.getUTCHours()).padStart(2, '0');
-  const mm = String(tw.getUTCMinutes()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
   return `${m}-${d} ${hh}:${mm}`;
 }
 
