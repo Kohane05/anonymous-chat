@@ -67,15 +67,20 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// 格式化時間：月-日 時:分，自動轉台北時區
+// ✅ 強化版：統一轉台北時區，相容所有時間格式
 function formatTime(isoString){
-  let s = String(isoString).trim();
-  if(!/[Zz]|[+-]\d{2}/.test(s)){
-    s = s.replace(' ', 'T') + 'Z';
-  } else if(/[+-]\d{2}$/.test(s)){
-    s += ':00';
+  let date;
+  const raw = String(isoString).trim();
+  
+  // 優先直接解析
+  date = new Date(raw);
+  
+  // 解析失敗時，強制補齊 UTC 標記再解析
+  if (isNaN(date.getTime())) {
+    const fixed = raw.replace(' ', 'T') + 'Z';
+    date = new Date(fixed);
   }
-  const date = new Date(s);
+
   const fmt = new Intl.DateTimeFormat('zh-TW', {
     timeZone: 'Asia/Taipei',
     month: '2-digit', day: '2-digit',
@@ -268,6 +273,9 @@ window.addReaction = async function(roomId, msgId, emoji){
 
   } catch(e) {
     console.error("表情更新失敗：", e);
+    const record = getReactionRecord();
+    const key = `${msgId}_${emoji}`;
+    const hasReacted = !!record[key];
     updateReactionDom(roomId, msgId, emoji, hasReacted ? 1 : -1);
     if(hasReacted) record[key] = true;
     else delete record[key];
