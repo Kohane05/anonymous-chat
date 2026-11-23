@@ -17,6 +17,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:0.4rem 0;display:block}
+.msg audio{max-width:100%;margin:0.4rem 0;display:block}
 .msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
 .other .msg-nick{text-align:left}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -41,14 +42,16 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem}
 .msg-reaction-bar span:hover{transform:scale(1.2)}
 
-/* 圖片預覽 */
-.image-preview{display:none;margin-bottom:0.5rem;position:relative}
+/* 預覽區塊 */
+.image-preview,.audio-preview{display:none;margin-bottom:0.5rem;position:relative}
 .image-preview img{max-width:120px;border-radius:6px;border:1px solid #444}
-.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
+.audio-preview audio{max-width:240px;border-radius:6px}
+.image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
 
 #inputArea{display:flex;gap:0.5rem;align-items:flex-end}
 .input-tools{display:flex;gap:0.3rem;flex-direction:column}
 .input-tools button{padding:0 0.8rem;background:#222;border:1px solid #444;color:#fff;border-radius:8px;cursor:pointer;font-size:1.1rem;height:42px}
+.input-tools button.recording{background:#8b2222;border-color:#8b2222}
 .emoji-panel{display:none;gap:0.4rem;padding:0.6rem;background:#1e1e1e;border:1px solid #333;border-radius:8px;margin-bottom:0.5rem;flex-wrap:wrap}
 .emoji-panel span{font-size:1.3rem;cursor:pointer;padding:0.2rem 0.4rem;border-radius:4px}
 .emoji-panel span:hover{background:#2a2a2a}
@@ -75,10 +78,15 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
   <img id="previewImg">
   <span onclick="clearImage()">✕</span>
 </div>
+<div class="audio-preview" id="audioPreview">
+  <audio id="previewAudio" controls>
+  <span onclick="clearAudio()">✕</span>
+</div>
 <div id="inputArea">
   <div class="input-tools">
     <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
     <button onclick="document.getElementById('imageInput').click()">📎</button>
+    <button id="recBtn" onclick="toggleRecord()">🎤</button>
     <input type="file" id="imageInput" accept="image/*" style="display:none">
   </div>
   <textarea id="msgInput" placeholder="寫訊息..."></textarea>
@@ -105,9 +113,6 @@ function formatTime(isoString){
   return `${m}-${d} ${hh}:${mm}`;
 }
 
-
-
-
 // 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
@@ -126,6 +131,12 @@ requestNotify();
 // 回覆狀態
 let currentReplyId = null;
 let currentImage = null;
+let currentAudio = null;
+
+// 錄音相關
+let recorder = null;
+let audioChunks = [];
+let stream = null;
 
 // 訪客ID + 自動分配固定編號
 function getVisitorId(){
@@ -168,6 +179,7 @@ function switchRoom(newRoom){
   roomId = newRoom;
   cancelReply();
   clearImage();
+  clearAudio();
   document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
   loadMsg();
@@ -232,6 +244,49 @@ function clearImage(){
   document.getElementById("previewImg").src = "";
 }
 
+// 錄音功能
+async function toggleRecord(){
+  if(!recorder){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      recorder = new MediaRecorder(stream);
+      audioChunks = [];
+      recorder.ondataavailable = e=>{
+        audioChunks.push(e.data);
+      }
+      recorder.onstop = ()=>{
+        const blob = new Blob(audioChunks, {type:"audio/webm"});
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = ()=>{
+          currentAudio = reader.result;
+          document.getElementById("previewAudio").src = currentAudio;
+          document.getElementById("audioPreview").style.display = "block";
+        }
+        stream.getTracks().forEach(t=>t.stop());
+        stream = null;
+        recorder = null;
+        document.getElementById("recBtn").classList.remove("recording");
+        document.getElementById("recBtn").innerText = "🎤";
+      }
+      recorder.start();
+      document.getElementById("recBtn").classList.add("recording");
+      document.getElementById("recBtn").innerText = "⏹";
+    }catch(err){
+      alert("無法取得麥克風權限，請允許權限或是使用 HTTPS 網址");
+      console.error(err);
+    }
+  }else{
+    recorder.stop();
+  }
+}
+
+function clearAudio(){
+  currentAudio = null;
+  document.getElementById("audioPreview").style.display = "none";
+  document.getElementById("previewAudio").src = "";
+}
+
 // 回覆功能
 function setReply(msgId, content){
   currentReplyId = msgId;
@@ -251,10 +306,8 @@ window.addReaction = async function(msgId, emoji){
   const key = `${msgId}_${emoji}`;
   const hasReacted = !!record[key];
 
-  // 樂觀更新 DOM
   updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
 
-  // 更新本機紀錄
   if(hasReacted){
     delete record[key];
   }else{
@@ -262,7 +315,6 @@ window.addReaction = async function(msgId, emoji){
   }
   setReactionRecord(record);
 
-  // 背景同步資料庫
   try {
     const {data: row, error: selectErr} = await sb
       .from("messages")
@@ -285,7 +337,6 @@ window.addReaction = async function(msgId, emoji){
 
   } catch(e) {
     console.error("表情同步失敗：", e);
-    // 失敗復原 DOM
     updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
     if(hasReacted){
       record[key] = true;
@@ -303,6 +354,7 @@ function updateReactionDom(msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
+
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -340,7 +392,6 @@ function renderChat(rows){
   rows.forEach(r=>{
     const div = document.createElement("div");
 
-    // 左右判斷：sender_id 優先
     let isMe = false;
     if(r.sender_id && r.sender_id.trim() !== ""){
       isMe = r.sender_id === visitorId;
@@ -348,12 +399,10 @@ function renderChat(rows){
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
     
-    // 顯示暱稱：管理員固定口哈內
     const isAdmin = r.is_admin || r.sender_id === "admin";
     const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
-    // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
@@ -361,16 +410,18 @@ function renderChat(rows){
       div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
     }
 
-    // 圖片
     if(r.image){
       div.innerHTML += `<img src="${r.image}" alt="圖片">`;
+    }
+
+    if(r.audio){
+      div.innerHTML += `<audio controls><source src="${r.audio}">`;
     }
     
     if(r.content){
       div.innerHTML += `<div>${r.content}</div>`;
     }
     
-    // 表情反應顯示
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -380,7 +431,6 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
-    // 快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -388,8 +438,7 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
-    // 回覆按鈕
-    const replyText = r.content ? r.content.replace(/'/g,"\\'") : "圖片";
+    const replyText = r.content ? r.content.replace(/'/g,"\\'") : "語音訊息";
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
     
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
@@ -409,7 +458,7 @@ async function loadMsg(){
 
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
-  if(!text && !currentImage) return;
+  if(!text && !currentImage && !currentAudio) return;
   
   const payload = {
     room_id:roomId,
@@ -421,6 +470,7 @@ async function sendMsg(){
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
   if(currentImage) payload.image = currentImage;
+  if(currentAudio) payload.audio = currentAudio;
   
   const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：", error);
@@ -428,6 +478,7 @@ async function sendMsg(){
   document.getElementById("msgInput").value = "";
   cancelReply();
   clearImage();
+  clearAudio();
 }
 
 function subscribeRealtime(){
@@ -438,7 +489,6 @@ function subscribeRealtime(){
         loadMsg();
         showNotify("新訊息", "你有一則新的匿名訊息");
       } else if(payload.eventType === "UPDATE"){
-        // UPDATE 只局部更新表情，不重繪、不跳動
         const newRow = payload.new;
         updateReactionDomFull(newRow.id, newRow.reactions);
       }
@@ -446,7 +496,6 @@ function subscribeRealtime(){
     .subscribe()
 }
 
-// 用完整 reactions 物件更新單則訊息
 function updateReactionDomFull(msgId, reactions){
   const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
   if(!msgEl) return;
