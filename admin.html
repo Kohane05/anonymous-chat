@@ -67,19 +67,17 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ✅ 最終穩定版：強制統一 UTC 解析，轉台北時區
+// ⏰ 時間偏移設定：顯示太快就調小，太慢就調大
+const TIME_OFFSET_HOURS = 4;
+
 function formatTime(isoString){
-  let str = String(isoString).trim().replace(/\s+/g, 'T');
-  str = str.replace(/[+-]\d{2}(:?\d{2})?$/, '');
-  if(!str.endsWith('Z')) str += 'Z';
-  
-  const date = new Date(str);
-  return date.toLocaleString('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    hour12: false
-  }).replace(/\//g, '-');
+  const date = new Date(isoString);
+  const tw = new Date(date.getTime() + TIME_OFFSET_HOURS * 60 * 60 * 1000);
+  const m = String(tw.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(tw.getUTCDate()).padStart(2, '0');
+  const hh = String(tw.getUTCHours()).padStart(2, '0');
+  const mm = String(tw.getUTCMinutes()).padStart(2, '0');
+  return `${m}-${d} ${hh}:${mm}`;
 }
 
 // 依 sender_id 生成固定編號
@@ -105,7 +103,7 @@ function showNotify(title, body) {
   if (document.hidden && Notification.permission === "granted") {
     new Notification(title, { body });
   }
-  notifyAudio.play().catch(e=>{});
+  notifyAudio.play().catch(()=>{});
 }
 requestNotify();
 
@@ -177,9 +175,8 @@ async function loadAllRooms(){
     setTimeout(()=>{
       document.querySelectorAll(`#emojiPanel-${roomId} span`).forEach(el=>{
         el.onclick = ()=>{
-          const input = document.getElementById(`rep-${roomId}`);
-          input.value += el.innerText;
-          input.focus();
+          document.getElementById(`rep-${roomId}`).value += el.innerText;
+          document.getElementById(`rep-${roomId}`).focus();
         };
       });
       document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
@@ -389,7 +386,7 @@ function createMsgElement(roomId, m, allRows){
 
   const replyText = m.content ? m.content.replace(/'/g,"\\'") : "圖片";
   inner += `
-    <button class="reply-btn" onclick="="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
+    <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
   `;
   
