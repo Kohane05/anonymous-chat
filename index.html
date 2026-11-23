@@ -95,13 +95,14 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ✅ 最終穩定版：瀏覽器自動轉本地時區（台灣 UTC+8）
+// ✅ 強制加 8 小時，固定台灣時間，不受設備時區影響
 function formatTime(isoString){
   const date = new Date(isoString);
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
+  const tw = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  const m = String(tw.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(tw.getUTCDate()).padStart(2, '0');
+  const hh = String(tw.getUTCHours()).padStart(2, '0');
+  const mm = String(tw.getUTCMinutes()).padStart(2, '0');
   return `${m}-${d} ${hh}:${mm}`;
 }
 
@@ -300,7 +301,6 @@ function updateReactionDom(msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
