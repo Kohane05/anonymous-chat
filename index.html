@@ -95,8 +95,8 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ⏰ 時間偏移設定：顯示太快就調小，太慢就調大
-const TIME_OFFSET_HOURS = 4;
+// ⏰ 時間偏移調整：顯示太快就調小，太慢就調大，可設負數
+const TIME_OFFSET_HOURS = 0;
 
 function formatTime(isoString){
   const date = new Date(isoString);
@@ -250,11 +250,18 @@ window.addReaction = async function(msgId, emoji){
   const key = `${msgId}_${emoji}`;
   const hasReacted = !!record[key];
 
+  // 樂觀更新 DOM
   updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
-  if(hasReacted) delete record[key];
-  else record[key] = true;
+
+  // 更新本機紀錄
+  if(hasReacted){
+    delete record[key];
+  }else{
+    record[key] = true;
+  }
   setReactionRecord(record);
 
+  // 背景同步資料庫
   try {
     const {data: row, error: selectErr} = await sb
       .from("messages")
@@ -277,9 +284,13 @@ window.addReaction = async function(msgId, emoji){
 
   } catch(e) {
     console.error("表情同步失敗：", e);
+    // 失敗復原 DOM
     updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted) record[key] = true;
-    else delete record[key];
+    if(hasReacted){
+      record[key] = true;
+    }else{
+      delete record[key];
+    }
     setReactionRecord(record);
   }
 }
@@ -291,6 +302,7 @@ function updateReactionDom(msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
+
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -316,7 +328,10 @@ function updateReactionDom(msgId, emoji, delta){
       reactionsBox.appendChild(span);
     }
   }
-  if(reactionsBox && reactionsBox.children.length === 0) reactionsBox.remove();
+
+  if(reactionsBox && reactionsBox.children.length === 0){
+    reactionsBox.remove();
+  }
 }
 
 function renderChat(rows){
@@ -325,6 +340,7 @@ function renderChat(rows){
   rows.forEach(r=>{
     const div = document.createElement("div");
 
+    // 左右判斷：sender_id 優先
     let isMe = false;
     if(r.sender_id && r.sender_id.trim() !== ""){
       isMe = r.sender_id === visitorId;
@@ -332,10 +348,12 @@ function renderChat(rows){
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
     
+    // 顯示暱稱：管理員固定口哈內
     const isAdmin = r.is_admin || r.sender_id === "admin";
     const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
 
+    // 回覆引用
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
@@ -343,6 +361,7 @@ function renderChat(rows){
       div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
     }
 
+    // 圖片
     if(r.image){
       div.innerHTML += `<img src="${r.image}" alt="圖片">`;
     }
@@ -351,6 +370,7 @@ function renderChat(rows){
       div.innerHTML += `<div>${r.content}</div>`;
     }
     
+    // 表情反應顯示
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -360,6 +380,7 @@ function renderChat(rows){
       div.innerHTML += reactionHtml;
     }
 
+    // 快捷表情列
     let barHtml = '<div class="msg-reaction-bar">';
     QUICK_EMOJIS.forEach(e=>{
       barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
@@ -367,6 +388,7 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
+    // 回覆按鈕
     const replyText = r.content ? r.content.replace(/'/g,"\\'") : "圖片";
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
     
@@ -415,6 +437,7 @@ function subscribeRealtime(){
         loadMsg();
         showNotify("新訊息", "你有一則新的匿名訊息");
       } else if(payload.eventType === "UPDATE"){
+        // UPDATE 只局部更新表情，不重繪、不跳動
         const newRow = payload.new;
         updateReactionDomFull(newRow.id, newRow.reactions);
       }
@@ -422,6 +445,7 @@ function subscribeRealtime(){
     .subscribe()
 }
 
+// 用完整 reactions 物件更新單則訊息
 function updateReactionDomFull(msgId, reactions){
   const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
   if(!msgEl) return;
