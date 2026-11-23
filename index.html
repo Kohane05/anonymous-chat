@@ -6,20 +6,23 @@
 <title>匿名私信</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
-body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
-h2{text-align:center;margin-bottom:1.5rem;color:#ccc}
-#chatBox{border:1px solid #333;border-radius:10px;padding:1rem;height:400px;overflow-y:auto;margin-bottom:1rem;background:#181818}
-.msg{margin-bottom:1rem;padding:0.6rem;border-radius:8px;background:#222}
-.msg-text{margin-bottom:0.3rem}
-.msg-time{font-size:0.75rem;color:#aaa}
-#inputArea{display:flex;gap:0.5rem}
-#msgInput{flex:1;padding:0.7rem;border-radius:8px;border:none;background:#222;color:#eee}
-#sendBtn{padding:0 1rem;border:none;border-radius:8px;background:#448aff;color:#fff}
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui, sans-serif}
+body{background:#121212;color:#eee;max-width:620px;margin:2rem auto;padding:0 1rem}
+h2{text-align:center;margin-bottom:1rem;color:#ddd;font-weight:500}
+.tip{color:#aaa;font-size:0.85rem;text-align:center;margin-bottom:1rem}
+#chatBox{border:1px solid #333;border-radius:12px;padding:1rem;height:420px;overflow-y:auto;margin-bottom:1rem;background:#181818}
+.msg{margin-bottom:1rem;padding:0.7rem;border-radius:10px;background:#222;word-break:break-all}
+.msg-sender{font-size:0.8rem;color:#8ab4f8;margin-bottom:0.3rem}
+.msg-text{margin-bottom:0.3rem;line-height:1.45}
+.msg-time{font-size:0.72rem;color:#aaa}
+#inputArea{display:flex;gap:0.6rem}
+#msgInput{flex:1;padding:0.8rem;border-radius:10px;border:0;background:#222;color:#eee;font-size:1rem}
+#sendBtn{padding:0 1.2rem;border:none;border-radius:10px;background:#448aff;color:#fff;font-size:1rem}
 </style>
 </head>
 <body>
 <h2>匿名私信</h2>
+<div class="tip">你的訪客編號：<span id="visitorId"></span>，這間聊天室只有你跟管理員看得到</div>
 <div id="chatBox"></div>
 <div id="inputArea">
   <input id="msgInput" placeholder="輸入訊息...">
@@ -27,12 +30,12 @@ h2{text-align:center;margin-bottom:1.5rem;color:#ccc}
 </div>
 
 <script>
-// 這裡換成你的 Supabase 資訊
-const SUPABASE_URL = "你的URL";
-const SUPABASE_KEY = "你的anon key";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ========= 這裡填你的 Supabase 資訊 =========
+const SUPABASE_URL = "替換成你的Project URL";
+const SUPABASE_KEY = "替換成你的anon public key";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ===== 台灣時區時間函式 =====
+// 台灣時區格式化函式
 function formatTaiwanTime(isoStr) {
   const d = new Date(isoStr);
   return d.toLocaleString('zh-TW', {
@@ -43,50 +46,71 @@ function formatTaiwanTime(isoStr) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false
-  })
+  });
 }
 
-const chatBox = document.getElementById('chatBox');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
+// 產生/讀取本機訪客ID（同一個人手機會維持同一個編號，獨立聊天室）
+function getVisitorId() {
+  let vid = localStorage.getItem("visitor_id");
+  if (!vid) {
+    vid = "訪客#" + Math.floor(Math.random() * 900000 + 100000);
+    localStorage.setItem("visitor_id", vid);
+  }
+  return vid;
+}
+const visitorId = getVisitorId();
+document.getElementById("visitorId").innerText = visitorId;
 
-// 讀訊息
+const chatBox = document.getElementById("chatBox");
+const msgInput = document.getElementById("msgInput");
+const sendBtn = document.getElementById("sendBtn");
+
+// 載入這位訪客專屬的對話
 async function loadMessages() {
   const { data } = await supabase
-    .from('messages')
-    .select('*')
-    .order('created_at', { ascending:true });
-  renderMsg(data);
+    .from("messages")
+    .select("*")
+    .eq("visitor_id", visitorId)
+    .order("created_at", { ascending: true });
+  render(data);
 }
 
-function renderMsg(list) {
-  chatBox.innerHTML = '';
-  list.forEach(msg=>{
-    const div = document.createElement('div');
+function render(list) {
+  chatBox.innerHTML = "";
+  list.forEach(msg => {
+    const div = document.createElement("div");
     div.className = "msg";
     div.innerHTML = `
+      <div class="msg-sender">${msg.sender}</div>
       <div class="msg-text">${msg.content}</div>
       <div class="msg-time">${formatTaiwanTime(msg.created_at)}</div>
-    `
+    `;
     chatBox.appendChild(div);
-  })
+  });
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// 送訊息
-sendBtn.onclick = async ()=>{
+// 送出訊息
+sendBtn.onclick = async () => {
   const content = msgInput.value.trim();
-  if(!content) return;
-  await supabase.from('messages').insert([{content}]);
-  msgInput.value = '';
-  loadMessages();
-}
+  if (!content) return;
+  await supabase.from("messages").insert([{
+    visitor_id: visitorId,
+    sender: visitorId,
+    content: content
+  }]);
+  msgInput.value = "";
+};
 
-// 即時監聽
-supabase.channel('messages')
-.on('postgres_changes', {event:'*', schema:'public', table:'messages'}, payload=>{
-  loadMessages();
-}).subscribe();
+// Realtime 即時監聽
+supabase.channel("msg-channel")
+.on("postgres_changes", {
+  event: "*",
+  schema: "public",
+  table: "messages",
+  filter: `visitor_id=eq.${visitorId}`
+}, () => loadMessages())
+.subscribe();
 
 loadMessages();
 </script>
