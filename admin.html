@@ -19,6 +19,7 @@ h2{text-align:center;margin-bottom:1rem}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:.3rem 0;display:block}
+.msg audio{max-width:100%;margin:.3rem 0;display:block}
 .msg-nick{font-size:.75rem;color:#8ab4f8;font-weight:500;margin-bottom:.2rem}
 .visitor .msg-nick{text-align:left}
 .reply-quote{font-size:.7rem;color:#aaa;border-left:2px solid #555;padding-left:.4rem;margin-bottom:.3rem;opacity:.8;text-align:left}
@@ -43,10 +44,12 @@ h2{text-align:center;margin-bottom:1rem}
 .reply-status{font-size:.75rem;color:#8ab4f8;margin-bottom:.4rem;display:none}
 .reply-status span{cursor:pointer;color:#aaa;margin-left:.5rem}
 .reply-area{display:flex;gap:.5rem;align-items:flex-end}
-.image-preview{display:none;margin-bottom:.4rem;position:relative}
+.image-preview,.audio-preview{display:none;margin-bottom:.4rem;position:relative}
 .image-preview img{max-width:100px;border-radius:6px;border:1px solid #444}
-.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
+.audio-preview audio{max-width:200px;border-radius:6px}
+.image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
 .emoji-btn{padding:0 .6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
+.rec-btn.recording{background:#8b2222;border-color:#8b2222}
 .emoji-panel{display:none;gap:.4rem;padding:.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:.4rem;flex-wrap:wrap}
 .emoji-panel span{font-size:1.1rem;cursor:pointer;padding:.2rem .3rem;border-radius:4px}
 .emoji-panel span:hover{background:#2a2a2a}
@@ -77,9 +80,6 @@ function formatTime(isoString){
   return `${m}-${d} ${hh}:${mm}`;
 }
 
-
-
-// 依 sender_id 生成固定編號
 function getVisitorNick(senderId){
   if(!senderId || senderId.trim() === "") return "匿名訪客";
   let hash = 0;
@@ -91,7 +91,6 @@ function getVisitorNick(senderId){
   return `訪客 #${num}`;
 }
 
-// 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
   if (!("Notification" in window)) return false;
@@ -110,8 +109,11 @@ const roomOldestTime = {};
 const PAGE_SIZE = 30;
 const roomReply = {};
 const roomImage = {};
+const roomAudio = {};
+const roomRecorder = {};
+const roomStream = {};
+const roomAudioChunks = {};
 
-// 讀取本機表情紀錄
 function getReactionRecord(){
   try {
     return JSON.parse(localStorage.getItem("reaction_record") || "{}");
@@ -157,6 +159,10 @@ async function loadAllRooms(){
           <img id="imgPrev-${roomId}">
           <span onclick="clearRoomImage('${roomId}')">✕</span>
         </div>
+        <div class="audio-preview" id="audioPreview-${roomId}">
+          <audio id="audioPrev-${roomId}" controls>
+          <span onclick="clearRoomAudio('${roomId}')">✕</span>
+        </div>
         <div class="emoji-panel" id="emojiPanel-${roomId}">
           <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
           <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
@@ -164,6 +170,7 @@ async function loadAllRooms(){
         <div class="reply-area">
           <button class="emoji-btn" onclick="toggleRoomEmoji('${roomId}')">😊</button>
           <button onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
+          <button class="rec-btn" id="recBtn-${roomId}" onclick="toggleRoomRecord('${roomId}')">🎤</button>
           <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
           <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
           <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
@@ -217,6 +224,50 @@ function clearRoomImage(roomId){
   document.getElementById(`imgPreview-${roomId}`).style.display = "none";
 }
 
+// 房間錄音功能
+async function toggleRoomRecord(roomId){
+  if(!roomRecorder[roomId]){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      roomStream[roomId] = stream;
+      const recorder = new MediaRecorder(stream);
+      roomAudioChunks[roomId] = [];
+      recorder.ondataavailable = e=>{
+        roomAudioChunks[roomId].push(e.data);
+      }
+      recorder.onstop = ()=>{
+        const blob = new Blob(roomAudioChunks[roomId], {type:"audio/webm"});
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = ()=>{
+          roomAudio[roomId] = reader.result;
+          document.getElementById(`audioPrev-${roomId}`).src = roomAudio[roomId];
+          document.getElementById(`audioPreview-${roomId}`).style.display = "block";
+        }
+        roomStream[roomId].getTracks().forEach(t=>t.stop());
+        roomStream[roomId] = null;
+        roomRecorder[roomId] = null;
+        document.getElementById(`recBtn-${roomId}`).classList.remove("recording");
+        document.getElementById(`recBtn-${roomId}`).innerText = "🎤";
+      }
+      recorder.start();
+      roomRecorder[roomId] = recorder;
+      document.getElementById(`recBtn-${roomId}`).classList.add("recording");
+      document.getElementById(`recBtn-${roomId}`).innerText = "⏹";
+    }catch(err){
+      alert("無法取得麥克風權限，請使用 HTTPS 網址並允許權限");
+      console.error(err);
+    }
+  }else{
+    roomRecorder[roomId].stop();
+  }
+}
+
+function clearRoomAudio(roomId){
+  roomAudio[roomId] = null;
+  document.getElementById(`audioPreview-${roomId}`).style.display = "none";
+}
+
 function setRoomReply(roomId, msgId, content){
   roomReply[roomId] = msgId;
   document.getElementById(`replyText-${roomId}`).innerText =
@@ -230,7 +281,6 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
   try {
     const record = getReactionRecord();
@@ -362,14 +412,16 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
 
-  // 圖片
   if(m.image){
     inner += `<img src="${m.image}" alt="圖片">`;
+  }
+
+  if(m.audio){
+    inner += `<audio controls><source src="${m.audio}">`;
   }
   
   inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
   
-  // 表情反應
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -379,14 +431,13 @@ function createMsgElement(roomId, m, allRows){
   }
   inner += `</span>`;
 
-  // 快捷表情列
   inner += '<span><div class="msg-reaction-bar">';
   QUICK_EMOJIS.forEach(e=>{
     inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
   });
   inner += '</div></span>';
 
-  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "圖片";
+  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "語音訊息";
   inner += `
     <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
@@ -423,7 +474,7 @@ async function delMsg(roomId, id){
 
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
-  if(!txt && !roomImage[roomId]) return;
+  if(!txt && !roomImage[roomId] && !roomAudio[roomId]) return;
   
   const payload = {
     room_id:roomId,
@@ -435,6 +486,7 @@ async function sendAdminMsg(roomId){
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   if(roomImage[roomId]) payload.image = roomImage[roomId];
+  if(roomAudio[roomId]) payload.audio = roomAudio[roomId];
   
   const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：",error);
@@ -442,6 +494,7 @@ async function sendAdminMsg(roomId){
   document.getElementById(`rep-${roomId}`).value = "";
   cancelRoomReply(roomId);
   clearRoomImage(roomId);
+  clearRoomAudio(roomId);
   setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
