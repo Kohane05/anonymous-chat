@@ -10,48 +10,48 @@
 body{background:#111;color:#eee;padding:1rem;max-width:900px;margin:0 auto}
 h2{text-align:center;margin-bottom:1rem}
 .room{border:1px solid #333;border-radius:8px;margin-bottom:1rem;background:#181818;overflow:hidden}
-.room-header{padding:0.8rem 1rem;background:#1f1f1f;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
-.room-id{color:#888;font-size:0.85rem}
+.room-header{padding:.8rem 1rem;background:#1f1f1f;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.room-id{color:#888;font-size:.85rem}
 .room-toggle{color:#666;font-size:1.2rem}
 .room-body{padding:0 1rem 1rem;display:block}
-.msg-list{height:300px;overflow-y:auto;padding-right:0.5rem;margin:0.8rem 0;border-bottom:1px solid #252525;display:flex;flex-direction:column}
-.msg{padding:0.6rem;border-radius:6px;margin:0.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.4}
+.msg-list{height:300px;overflow-y:auto;padding-right:.5rem;margin:.8rem 0;border-bottom:1px solid #252525;display:flex;flex-direction:column}
+.msg{padding:.6rem;border-radius:6px;margin:.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.4}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
-.msg img{max-width:100%;border-radius:6px;margin:0.3rem 0;display:block}
-.msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
+.msg img{max-width:100%;border-radius:6px;margin:.3rem 0;display:block}
+.msg-nick{font-size:.75rem;color:#8ab4f8;font-weight:500;margin-bottom:.2rem}
 .visitor .msg-nick{text-align:left}
-.reply-quote{font-size:0.7rem;color:#aaa;border-left:2px solid #555;padding-left:0.4rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
-.reply-btn{font-size:0.7rem;background:none;border:none;color:#aaa;cursor:pointer;margin-right:0.5rem}
-.del-btn{background:#8b2222;border:none;color:#fff;padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.75rem;flex-shrink:0;margin-left:0.8rem}
+.reply-quote{font-size:.7rem;color:#aaa;border-left:2px solid #555;padding-left:.4rem;margin-bottom:.3rem;opacity:.8;text-align:left}
+.reply-btn{font-size:.7rem;background:none;border:none;color:#aaa;cursor:pointer;margin-right:.5rem}
+.del-btn{background:#8b2222;border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;flex-shrink:0;margin-left:.8rem}
 
 /* 表情反應 */
-.msg-reactions{display:flex;gap:0.3rem;margin-top:0.3rem;flex-wrap:wrap;justify-content:flex-end}
+.msg-reactions{display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap;justify-content:flex-end}
 .visitor .msg-reactions{justify-content:flex-start}
-.reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:0.1rem 0.4rem;font-size:0.8rem;cursor:pointer}
+.reaction-item{background:#222;border:1px solid #444;border-radius:12px;padding:.1rem .4rem;font-size:.8rem;cursor:pointer}
 .msg-reaction-bar{
   position:absolute;bottom:-12px;left:6px;
-  display:none;gap:0.2rem;background:#1a1a1a;
-  border:1px solid #333;border-radius:20px;padding:0.15rem 0.4rem;z-index:10
+  display:none;gap:.2rem;background:#1a1a1a;
+  border:1px solid #333;border-radius:20px;padding:.15rem .4rem;z-index:10
 }
 .msg:hover .msg-reaction-bar{display:flex}
 .admin .msg-reaction-bar{left:auto;right:6px}
-.msg-reaction-bar span{cursor:pointer;font-size:0.85rem;padding:0 0.15rem}
+.msg-reaction-bar span{cursor:pointer;font-size:.85rem;padding:0 .15rem}
 
-.load-more{width:100%;padding:0.4rem;background:#222;border:1px solid #333;color:#aaa;border-radius:4px;cursor:pointer;margin-bottom:0.6rem;font-size:0.8rem}
+.load-more{width:100%;padding:.4rem;background:#222;border:1px solid #333;color:#aaa;border-radius:4px;cursor:pointer;margin-bottom:.6rem;font-size:.8rem}
 .load-more:hover{background:#2a2a2a}
-.reply-status{font-size:0.75rem;color:#8ab4f8;margin-bottom:0.4rem;display:none}
-.reply-status span{cursor:pointer;color:#aaa;margin-left:0.5rem}
-.reply-area{display:flex;gap:0.5rem;align-items:flex-end}
-.image-preview{display:none;margin-bottom:0.4rem;position:relative}
+.reply-status{font-size:.75rem;color:#8ab4f8;margin-bottom:.4rem;display:none}
+.reply-status span{cursor:pointer;color:#aaa;margin-left:.5rem}
+.reply-area{display:flex;gap:.5rem;align-items:flex-end}
+.image-preview{display:none;margin-bottom:.4rem;position:relative}
 .image-preview img{max-width:100px;border-radius:6px;border:1px solid #444}
-.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.7rem}
-.emoji-btn{padding:0 0.6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
-.emoji-panel{display:none;gap:0.4rem;padding:0.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:0.4rem;flex-wrap:wrap}
-.emoji-panel span{font-size:1.1rem;cursor:pointer;padding:0.2rem 0.3rem;border-radius:4px}
+.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
+.emoji-btn{padding:0 .6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
+.emoji-panel{display:none;gap:.4rem;padding:.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:.4rem;flex-wrap:wrap}
+.emoji-panel span{font-size:1.1rem;cursor:pointer;padding:.2rem .3rem;border-radius:4px}
 .emoji-panel span:hover{background:#2a2a2a}
-textarea{flex:1;padding:0.6rem;background:#222;border:1px solid #444;border-radius:6px;color:#fff;resize:none}
-button{padding:0 0.8rem;background:#3670b9;color:white;border:none;border-radius:6px;cursor:pointer}
+textarea{flex:1;padding:.6rem;background:#222;border:1px solid #444;border-radius:6px;color:#fff;resize:none}
+button{padding:0 .8rem;background:#3670b9;color:white;border:none;border-radius:6px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -67,27 +67,19 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ✅ 強化版：統一轉台北時區，相容所有時間格式
+// ✅ 最終穩定版：強制統一 UTC 解析，轉台北時區
 function formatTime(isoString){
-  let date;
-  const raw = String(isoString).trim();
+  let str = String(isoString).trim().replace(/\s+/g, 'T');
+  str = str.replace(/[+-]\d{2}(:?\d{2})?$/, '');
+  if(!str.endsWith('Z')) str += 'Z';
   
-  // 優先直接解析
-  date = new Date(raw);
-  
-  // 解析失敗時，強制補齊 UTC 標記再解析
-  if (isNaN(date.getTime())) {
-    const fixed = raw.replace(' ', 'T') + 'Z';
-    date = new Date(fixed);
-  }
-
-  const fmt = new Intl.DateTimeFormat('zh-TW', {
+  const date = new Date(str);
+  return date.toLocaleString('zh-TW', {
     timeZone: 'Asia/Taipei',
     month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     hour12: false
-  });
-  return fmt.format(date).replace(/\//g, '-');
+  }).replace(/\//g, '-');
 }
 
 // 依 sender_id 生成固定編號
@@ -120,7 +112,7 @@ requestNotify();
 const roomOldestTime = {};
 const PAGE_SIZE = 30;
 const roomReply = {};
-const roomImage = {}; // 每個房間的圖片暫存
+const roomImage = {};
 
 // 讀取本機表情紀錄
 function getReactionRecord(){
@@ -138,7 +130,7 @@ async function loadAllRooms(){
   const {data:allMsg, error} = await sb
     .from("messages")
     .select("room_id, created_at")
-    .order("created_at",{asc:false})
+    .order("created_at",{ascending:false});
   
   if(error) {
     console.log("載入錯誤：", error);
@@ -179,18 +171,17 @@ async function loadAllRooms(){
           <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
           <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
         </div>
-      </div>`
+      </div>`;
     box.appendChild(roomDiv);
 
-    // 綁定表情、圖片上傳
     setTimeout(()=>{
       document.querySelectorAll(`#emojiPanel-${roomId} span`).forEach(el=>{
         el.onclick = ()=>{
           const input = document.getElementById(`rep-${roomId}`);
           input.value += el.innerText;
           input.focus();
-        }
-      })
+        };
+      });
       document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
         const file = e.target.files[0];
         if(!file) return;
@@ -213,8 +204,8 @@ async function loadAllRooms(){
         document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
         document.getElementById(`imgPreview-${roomId}`).style.display = "block";
         e.target.value = "";
-      }
-    },0)
+      };
+    },0);
 
     await loadRoomMsg(roomId, true);
   }
@@ -232,7 +223,8 @@ function clearRoomImage(roomId){
 
 function setRoomReply(roomId, msgId, content){
   roomReply[roomId] = msgId;
-  document.getElementById(`replyText-${roomId}`).innerText = content.length > 20 ? content.slice(0,20)+"..." : content;
+  document.getElementById(`replyText-${roomId}`).innerText =
+    content.length > 20 ? content.slice(0,20)+"..." : content;
   document.getElementById(`replyStatus-${roomId}`).style.display = "block";
   document.getElementById(`rep-${roomId}`).focus();
 }
@@ -281,7 +273,7 @@ window.addReaction = async function(roomId, msgId, emoji){
     else delete record[key];
     setReactionRecord(record);
   }
-}
+};
 
 function updateReactionDom(roomId, msgId, emoji, delta){
   const listEl = document.getElementById(`r-${roomId}`);
@@ -324,7 +316,7 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
     .from("messages")
     .select("*")
     .eq("room_id", roomId)
-    .order("created_at",{asc:true})
+    .order("created_at",{ascending:true})
     .limit(PAGE_SIZE);
 
   if(!isFirstLoad && roomOldestTime[roomId]){
@@ -339,13 +331,13 @@ async function loadRoomMsg(roomId, isFirstLoad = false){
   if(isFirstLoad){
     listEl.innerHTML = "";
     if(data.length > 0) roomOldestTime[roomId] = data[0].created_at;
-    data.forEach(m=>listEl.appendChild(createMsgElement(roomId, m, data)))
+    data.forEach(m=>listEl.appendChild(createMsgElement(roomId, m, data)));
     listEl.scrollTop = listEl.scrollHeight;
   }else{
     if(data.length > 0) roomOldestTime[roomId] = data[0].created_at;
     const beforeHeight = listEl.scrollHeight;
     const fragment = document.createDocumentFragment();
-    data.forEach(m=>fragment.appendChild(createMsgElement(roomId, m, data)))
+    data.forEach(m=>fragment.appendChild(createMsgElement(roomId, m, data)));
     listEl.insertBefore(fragment, listEl.firstChild);
     listEl.scrollTop += listEl.scrollHeight - beforeHeight;
   }
@@ -374,34 +366,32 @@ function createMsgElement(roomId, m, allRows){
     inner += `<div class="reply-quote">↩ ${short}</div>`;
   }
 
-  // 圖片
   if(m.image){
     inner += `<img src="${m.image}" alt="圖片">`;
   }
   
   inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
   
-  // 表情反應
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
       inner += `<span class="reaction-item" data-emoji="${emoji}" data-count="${count}" onclick="addReaction('${roomId}', ${m.id}, '${emoji}')">${emoji} ${count}</span>`;
-    })
+    });
     inner += '</div>';
   }
   inner += `</span>`;
 
-  // 快捷表情列
   inner += '<span><div class="msg-reaction-bar">';
   QUICK_EMOJIS.forEach(e=>{
     inner += `<span onclick="addReaction('${roomId}', ${m.id}, '${e}')">${e}</span>`;
-  })
-  inner += '</div>';
+  });
+  inner += '</div></span>';
 
+  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "圖片";
   inner += `
-    <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${m.content ? m.content.replace(/'/g,"\\'") : "圖片"}')">回覆</button>
+    <button class="reply-btn" onclick="="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
-  </span>`;
+  `;
   
   div.innerHTML = inner;
   return div;
@@ -446,7 +436,7 @@ async function sendAdminMsg(roomId){
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   if(roomImage[roomId]) payload.image = roomImage[roomId];
   
-  const {error} = await sb.from("messages").insert([payload])
+  const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：",error);
   
   document.getElementById(`rep-${roomId}`).value = "";
@@ -470,7 +460,7 @@ sb.channel("all")
       updateReactionDomFull(newMsg.room_id, newMsg.id, newMsg.reactions);
     }
   })
-  .subscribe()
+  .subscribe();
 
 function updateReactionDomFull(roomId, msgId, reactions){
   const listEl = document.getElementById(`r-${roomId}`);
@@ -495,7 +485,7 @@ function updateReactionDomFull(roomId, msgId, reactions){
       span.innerText = `${emoji} ${count}`;
       span.onclick = ()=>addReaction(roomId, msgId, emoji);
       reactionsBox.appendChild(span);
-    })
+    });
   } else {
     reactionsBox.remove();
   }
