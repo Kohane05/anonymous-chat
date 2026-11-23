@@ -19,7 +19,7 @@ h2{text-align:center;margin-bottom:1rem}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:.3rem 0;display:block}
-.msg audio{max-width:100%;margin:.3rem 0;display:block;height:32px}
+.msg audio{max-width:100%;margin:.3rem 0;display:block}
 .msg-nick{font-size:.75rem;color:#8ab4f8;font-weight:500;margin-bottom:.2rem}
 .visitor .msg-nick{text-align:left}
 .reply-quote{font-size:.7rem;color:#aaa;border-left:2px solid #555;padding-left:.4rem;margin-bottom:.3rem;opacity:.8;text-align:left}
@@ -44,13 +44,15 @@ h2{text-align:center;margin-bottom:1rem}
 .reply-status{font-size:.75rem;color:#8ab4f8;margin-bottom:.4rem;display:none}
 .reply-status span{cursor:pointer;color:#aaa;margin-left:.5rem}
 .reply-area{display:flex;gap:.5rem;align-items:flex-end}
-.image-preview,.audio-preview{display:none;margin-bottom:.4rem;position:relative}
+.image-preview{display:none;margin-bottom:.4rem;position:relative}
 .image-preview img{max-width:100px;border-radius:6px;border:1px solid #444}
-.audio-preview audio{max-width:220px;border-radius:6px;height:32px}
-.image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
-.recording-info{display:none;align-items:center;gap:0.4rem;margin-bottom:0.4rem;color:#ff6b6b;font-size:0.8rem}
-.recording-dot{width:7px;height:7px;border-radius:50%;background:#ff4444;animation:blink 1s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
+.audio-preview{display:none;margin-bottom:.4rem;position:relative;align-items:center;gap:.6rem;flex-wrap:wrap;width:fit-content}
+.audio-preview audio{max-width:200px;flex-shrink:0}
+.audio-preview .discard{background:#8b2222;border:none;color:#fff;border-radius:6px;padding:.35rem .8rem;font-size:.75rem;cursor:pointer;flex-shrink:0;position:relative;z-index:2;pointer-events:auto;min-height:30px}
+.audio-preview .discard:hover{background:#a82b2b}
+.audio-preview .dur{font-size:.75rem;color:#999}
+.rec-timer{font-size:.85rem;color:#ff6b6b;font-weight:600;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
 .emoji-btn{padding:0 .6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
 .rec-btn.recording{background:#8b2222;border-color:#8b2222}
 .emoji-panel{display:none;gap:.4rem;padding:.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:.4rem;flex-wrap:wrap}
@@ -73,16 +75,25 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// ========== 時間格式化：指定台北時區，月-日 時:分 ==========
 function formatTime(isoString){
+  if(!isoString) return "";
   const date = new Date(isoString);
-  if (isNaN(date.getTime())) return isoString;
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${m}-${d} ${hh}:${mm}`;
+  if(isNaN(date.getTime())) return String(isoString);
+  const fmt = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hour12: false
+  });
+  const parts = fmt.formatToParts(date);
+  const get = t => (parts.find(p => p.type === t) || {}).value || "";
+  let hh = get("hour");
+  if(hh === "24") hh = "00";
+  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
 }
 
+// 依 sender_id 生成固定編號
 function getVisitorNick(senderId){
   if(!senderId || senderId.trim() === "") return "匿名訪客";
   let hash = 0;
@@ -94,6 +105,7 @@ function getVisitorNick(senderId){
   return `訪客 #${num}`;
 }
 
+// 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
   if (!("Notification" in window)) return false;
@@ -113,12 +125,42 @@ const PAGE_SIZE = 30;
 const roomReply = {};
 const roomImage = {};
 const roomAudio = {};
-const roomRecorder = {};
-const roomStream = {};
-const roomAudioChunks = {};
-const roomTimer = {};
-const roomSeconds = {};
 
+// 語音錄音狀態（單一後台同時只錄一則）
+let recorder = null;
+let audioChunks = [];
+let micStream = null;
+let recordingRoom = null;
+let recTimerId = null;
+let recSeconds = 0;
+let audioDiscarded = false; // 點捨棄後，onstop 不再把音檔塞回預覽
+const MAX_REC_SECONDS = 60; // 最長錄音 60 秒，到點自動停止
+
+function fmtSec(s){
+  const m = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${m}:${ss}`;
+}
+function startRecTimer(roomId){
+  recSeconds = 0;
+  const el = document.getElementById(`recTimer-${roomId}`);
+  if(el){ el.textContent = fmtSec(0); el.style.display = "inline-block"; }
+  recTimerId = setInterval(()=>{
+    recSeconds++;
+    const t = document.getElementById(`recTimer-${recordingRoom}`);
+    if(t) t.textContent = fmtSec(recSeconds);
+    if(recSeconds >= MAX_REC_SECONDS) toggleRecord(recordingRoom);
+  }, 1000);
+}
+function stopRecTimer(){
+  if(recTimerId){ clearInterval(recTimerId); recTimerId = null; }
+  if(recordingRoom){
+    const t = document.getElementById(`recTimer-${recordingRoom}`);
+    if(t) t.style.display = "none";
+  }
+}
+
+// 讀取本機表情紀錄
 function getReactionRecord(){
   try {
     return JSON.parse(localStorage.getItem("reaction_record") || "{}");
@@ -135,7 +177,7 @@ async function loadAllRooms(){
     .from("messages")
     .select("room_id, created_at")
     .order("created_at",{ascending:false});
-  
+
   if(error) {
     console.log("載入錯誤：", error);
     return;
@@ -164,13 +206,10 @@ async function loadAllRooms(){
           <img id="imgPrev-${roomId}">
           <span onclick="clearRoomImage('${roomId}')">✕</span>
         </div>
-        <div class="recording-info" id="recInfo-${roomId}">
-          <span class="recording-dot"></span>
-          <span>錄音中 <span id="roomTimer-${roomId}">00:00</span></span>
-        </div>
         <div class="audio-preview" id="audioPreview-${roomId}">
-          <audio id="audioPrev-${roomId}" controls>
-          <span onclick="clearRoomAudio('${roomId}')">✕</span>
+          <audio id="audioEl-${roomId}" controls preload="metadata"></audio>
+          <span class="dur" id="audioDur-${roomId}"></span>
+          <button class="discard" onclick="clearRoomAudio('${roomId}')">捨棄</button>
         </div>
         <div class="emoji-panel" id="emojiPanel-${roomId}">
           <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
@@ -178,8 +217,9 @@ async function loadAllRooms(){
         </div>
         <div class="reply-area">
           <button class="emoji-btn" onclick="toggleRoomEmoji('${roomId}')">😊</button>
-          <button onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
-          <button class="rec-btn" id="recBtn-${roomId}" onclick="toggleRoomRecord('${roomId}')">🎤</button>
+          <button class="emoji-btn" onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
+          <button class="emoji-btn rec-btn" id="recBtn-${roomId}" onclick="toggleRecord('${roomId}')">🎤</button>
+          <span class="rec-timer" id="recTimer-${roomId}" style="display:none">00:00</span>
           <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
           <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
           <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
@@ -200,7 +240,7 @@ async function loadAllRooms(){
         const img = new Image();
         img.src = URL.createObjectURL(file);
         await new Promise(r=>img.onload = r);
-        
+
         const maxWidth = 800;
         let w = img.width, h = img.height;
         if(w > maxWidth){
@@ -211,7 +251,7 @@ async function loadAllRooms(){
         canvas.width = w;
         canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        
+
         roomImage[roomId] = canvas.toDataURL("image/jpeg", 0.8);
         document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
         document.getElementById(`imgPreview-${roomId}`).style.display = "block";
@@ -233,76 +273,81 @@ function clearRoomImage(roomId){
   document.getElementById(`imgPreview-${roomId}`).style.display = "none";
 }
 
-// ===== 後台每房獨立錄音 + 計時 =====
-function startRoomTimer(roomId){
-  roomSeconds[roomId] = 0;
-  updateRoomTimerDisplay(roomId);
-  roomTimer[roomId] = setInterval(()=>{
-    roomSeconds[roomId]++;
-    updateRoomTimerDisplay(roomId);
-  }, 1000);
-}
-
-function stopRoomTimer(roomId){
-  if(roomTimer[roomId]){
-    clearInterval(roomTimer[roomId]);
-    roomTimer[roomId] = null;
-  }
-  document.getElementById(`recInfo-${roomId}`).style.display = "none";
-}
-
-function updateRoomTimerDisplay(roomId){
-  const m = String(Math.floor(roomSeconds[roomId] / 60)).padStart(2, '0');
-  const s = String(roomSeconds[roomId] % 60).padStart(2, '0');
-  document.getElementById(`roomTimer-${roomId}`).innerText = `${m}:${s}`;
-}
-
-async function toggleRoomRecord(roomId){
-  if(!roomRecorder[roomId]){
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      roomStream[roomId] = stream;
-      const recorder = new MediaRecorder(stream);
-      roomAudioChunks[roomId] = [];
-      recorder.ondataavailable = e=>{
-        roomAudioChunks[roomId].push(e.data);
-      }
-      recorder.onstop = ()=>{
-        const blob = new Blob(roomAudioChunks[roomId], {type:"audio/webm"});
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = ()=>{
-          roomAudio[roomId] = reader.result;
-          document.getElementById(`audioPrev-${roomId}`).src = roomAudio[roomId];
-          document.getElementById(`audioPreview-${roomId}`).style.display = "block";
-        }
-        roomStream[roomId].getTracks().forEach(t=>t.stop());
-        roomStream[roomId] = null;
-        roomRecorder[roomId] = null;
-        document.getElementById(`recBtn-${roomId}`).classList.remove("recording");
-        document.getElementById(`recBtn-${roomId}`).innerText = "🎤";
-        stopRoomTimer(roomId);
-      }
-      recorder.start();
-      roomRecorder[roomId] = recorder;
-      startRoomTimer(roomId);
-      document.getElementById(`recInfo-${roomId}`).style.display = "flex";
-      document.getElementById(`recBtn-${roomId}`).classList.add("recording");
-      document.getElementById(`recBtn-${roomId}`).innerText = "⏹";
-    }catch(err){
-      alert("無法取得麥克風權限，請使用 HTTPS 網址並允許權限");
-      console.error(err);
-    }
-  }else{
-    roomRecorder[roomId].stop();
-  }
-}
-
 function clearRoomAudio(roomId){
+  // 標記為捨棄：即使 onstop 稍後才觸發，也不會把音檔塞回預覽
+  audioDiscarded = true;
+  // 若還在錄音，一併停止
+  if(recorder){ try{ recorder.stop(); }catch(e){} }
+  stopRecTimer();
   roomAudio[roomId] = null;
-  roomSeconds[roomId] = 0;
+  const player = document.getElementById(`audioEl-${roomId}`);
+  if(player){ try{ player.pause(); }catch(e){} player.removeAttribute("src"); player.load(); }
   document.getElementById(`audioPreview-${roomId}`).style.display = "none";
-  document.getElementById(`audioPrev-${roomId}`).src = "";
+  const dur = document.getElementById(`audioDur-${roomId}`);
+  if(dur) dur.textContent = "";
+  const btn = document.getElementById(`recBtn-${roomId}`);
+  if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
+}
+
+// ========== 語音錄音 ==========
+async function toggleRecord(roomId){
+  if(recorder){
+    recorder.stop();
+    return;
+  }
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
+    recorder = mime ? new MediaRecorder(micStream, { type: mime }) : new MediaRecorder(micStream);
+    audioChunks = [];
+    recordingRoom = roomId;
+
+    recorder.ondataavailable = e => { if(e.data && e.data.size) audioChunks.push(e.data); };
+
+    recorder.onstop = () => {
+      stopRecTimer();
+      const mime = recorder ? recorder.mimeType : "";
+      const stoppedRoom = recordingRoom;
+      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+      recorder = null;
+      const btn = document.getElementById(`recBtn-${stoppedRoom}`);
+      if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
+      recordingRoom = null;
+
+      // 若已按捨棄，不保留、不顯示這段音檔
+      if(audioDiscarded) return;
+
+      const blob = new Blob(audioChunks, { type: mime || "audio/webm" });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        roomAudio[stoppedRoom] = reader.result;
+        const player = document.getElementById(`audioEl-${stoppedRoom}`);
+        player.src = roomAudio[stoppedRoom];
+        player.onloadedmetadata = () => {
+          const dur = Math.round(player.duration || recSeconds);
+          const durEl = document.getElementById(`audioDur-${stoppedRoom}`);
+          if(durEl) durEl.textContent = fmtSec(dur);
+        };
+        document.getElementById(`audioPreview-${stoppedRoom}`).style.display = "flex";
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    audioDiscarded = false;
+    recorder.start();
+    startRecTimer(roomId);
+    const btn = document.getElementById(`recBtn-${roomId}`);
+    btn.innerText = "⏹";
+    btn.classList.add("recording");
+  }catch(err){
+    alert("無法取得麥克風權限，請允許麥克風權限後再試");
+    console.error(err);
+    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+    recorder = null;
+    stopRecTimer();
+  }
 }
 
 function setRoomReply(roomId, msgId, content){
@@ -318,6 +363,7 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
+// 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
   try {
     const record = getReactionRecord();
@@ -437,7 +483,7 @@ function createMsgElement(roomId, m, allRows){
   }
   div.className = "msg "+(isMe ? "admin" : "visitor");
   div.dataset.id = m.id;
-  
+
   let inner = "";
   const nick = isMe ? ADMIN_NICKNAME : getVisitorNick(m.sender_id);
   inner += `<div class="msg-nick">${nick}</div>`;
@@ -454,11 +500,11 @@ function createMsgElement(roomId, m, allRows){
   }
 
   if(m.audio){
-    inner += `<audio controls><source src="${m.audio}">`;
+    inner += `<audio controls preload="metadata"><source src="${m.audio}" type="audio/webm"></audio>`;
   }
-  
+
   inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
-  
+
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -474,12 +520,12 @@ function createMsgElement(roomId, m, allRows){
   });
   inner += '</div></span>';
 
-  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "語音訊息";
+  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "圖片/語音";
   inner += `
     <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
   `;
-  
+
   div.innerHTML = inner;
   return div;
 }
@@ -512,22 +558,23 @@ async function delMsg(roomId, id){
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
   if(!txt && !roomImage[roomId] && !roomAudio[roomId]) return;
-  
+
   const payload = {
-    room_id:roomId,
-    content:txt,
-    is_admin:true,
+    room_id: roomId,
+    content: txt,
+    is_admin: true,
     sender_id: ADMIN_SENDER_ID,
     nickname: ADMIN_NICKNAME,
+    // 前端直接產生時間（正確 UTC 時間戳），不依賴資料庫 now()
     created_at: new Date().toISOString()
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   if(roomImage[roomId]) payload.image = roomImage[roomId];
   if(roomAudio[roomId]) payload.audio = roomAudio[roomId];
-  
+
   const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：",error);
-  
+
   document.getElementById(`rep-${roomId}`).value = "";
   cancelRoomReply(roomId);
   clearRoomImage(roomId);
