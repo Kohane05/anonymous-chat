@@ -95,22 +95,20 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// 格式化時間：月-日 時:分，自動轉台北時區
+// ✅ 最終穩定版：強制統一 UTC 解析，轉台北時區
 function formatTime(isoString){
-  let s = String(isoString).trim();
-  if(!/[Zz]|[+-]\d{2}/.test(s)){
-    s = s.replace(' ', 'T') + 'Z';
-  } else if(/[+-]\d{2}$/.test(s)){
-    s += ':00';
-  }
-  const date = new Date(s);
-  const fmt = new Intl.DateTimeFormat('zh-TW', {
+  let str = String(isoString).trim().replace(/\s+/g, 'T');
+  // 移除所有舊的時區標記，統一強制當 UTC 處理
+  str = str.replace(/[+-]\d{2}(:?\d{2})?$/, '');
+  if(!str.endsWith('Z')) str += 'Z';
+  
+  const date = new Date(str);
+  return date.toLocaleString('zh-TW', {
     timeZone: 'Asia/Taipei',
     month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     hour12: false
-  });
-  return fmt.format(date).replace(/\//g, '-');
+  }).replace(/\//g, '-');
 }
 
 // 通知 + 提示音
