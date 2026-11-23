@@ -17,7 +17,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:0.4rem 0;display:block}
-.msg audio{max-width:100%;margin:0.4rem 0;display:block}
+.msg audio{max-width:100%;margin:0.4rem 0;display:block;height:36px}
 .msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
 .other .msg-nick{text-align:left}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -45,8 +45,13 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 /* 預覽區塊 */
 .image-preview,.audio-preview{display:none;margin-bottom:0.5rem;position:relative}
 .image-preview img{max-width:120px;border-radius:6px;border:1px solid #444}
-.audio-preview audio{max-width:240px;border-radius:6px}
+.audio-preview audio{max-width:280px;border-radius:6px;height:36px}
 .image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
+
+/* 錄音計時 */
+.recording-info{display:none;align-items:center;gap:0.5rem;margin-bottom:0.5rem;color:#ff6b6b;font-size:0.85rem}
+.recording-dot{width:8px;height:8px;border-radius:50%;background:#ff4444;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 
 #inputArea{display:flex;gap:0.5rem;align-items:flex-end}
 .input-tools{display:flex;gap:0.3rem;flex-direction:column}
@@ -77,6 +82,10 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
 <div class="image-preview" id="imagePreview">
   <img id="previewImg">
   <span onclick="clearImage()">✕</span>
+</div>
+<div class="recording-info" id="recordingInfo">
+  <span class="recording-dot"></span>
+  <span>錄音中 <span id="timerDisplay">00:00</span></span>
 </div>
 <div class="audio-preview" id="audioPreview">
   <audio id="previewAudio" controls>
@@ -137,6 +146,8 @@ let currentAudio = null;
 let recorder = null;
 let audioChunks = [];
 let stream = null;
+let timerInterval = null;
+let recordingSeconds = 0;
 
 // 訪客ID + 自動分配固定編號
 function getVisitorId(){
@@ -180,6 +191,7 @@ function switchRoom(newRoom){
   cancelReply();
   clearImage();
   clearAudio();
+  stopTimer();
   document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
   loadMsg();
@@ -244,7 +256,30 @@ function clearImage(){
   document.getElementById("previewImg").src = "";
 }
 
-// 錄音功能
+// ===== 錄音 + 計時 + 刪除 =====
+function startTimer(){
+  recordingSeconds = 0;
+  updateTimerDisplay();
+  timerInterval = setInterval(()=>{
+    recordingSeconds++;
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function stopTimer(){
+  if(timerInterval){
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  document.getElementById("recordingInfo").style.display = "none";
+}
+
+function updateTimerDisplay(){
+  const m = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
+  const s = String(recordingSeconds % 60).padStart(2, '0');
+  document.getElementById("timerDisplay").innerText = `${m}:${s}`;
+}
+
 async function toggleRecord(){
   if(!recorder){
     try{
@@ -268,8 +303,11 @@ async function toggleRecord(){
         recorder = null;
         document.getElementById("recBtn").classList.remove("recording");
         document.getElementById("recBtn").innerText = "🎤";
+        stopTimer();
       }
       recorder.start();
+      startTimer();
+      document.getElementById("recordingInfo").style.display = "flex";
       document.getElementById("recBtn").classList.add("recording");
       document.getElementById("recBtn").innerText = "⏹";
     }catch(err){
@@ -283,6 +321,7 @@ async function toggleRecord(){
 
 function clearAudio(){
   currentAudio = null;
+  recordingSeconds = 0;
   document.getElementById("audioPreview").style.display = "none";
   document.getElementById("previewAudio").src = "";
 }
