@@ -17,7 +17,7 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .other{background:#2a2a2a;margin-right:auto}
 .me{background:#254b70;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:0.4rem 0;display:block}
-.msg audio{max-width:100%;margin:0.4rem 0;display:block;height:36px}
+.msg audio{max-width:100%;margin:0.4rem 0;display:block}
 .msg-nick{font-size:0.75rem;color:#8ab4f8;font-weight:500;margin-bottom:0.2rem}
 .other .msg-nick{text-align:left}
 .reply-quote{font-size:0.75rem;color:#aaa;border-left:2px solid #555;padding-left:0.5rem;margin-bottom:0.3rem;opacity:0.8;text-align:left}
@@ -42,16 +42,17 @@ h2{text-align:center;margin-bottom:1rem;color:#ccc}
 .msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem}
 .msg-reaction-bar span:hover{transform:scale(1.2)}
 
-/* 預覽區塊 */
-.image-preview,.audio-preview{display:none;margin-bottom:0.5rem;position:relative}
+/* 圖片預覽 */
+.image-preview{display:none;margin-bottom:0.5rem;position:relative}
 .image-preview img{max-width:120px;border-radius:6px;border:1px solid #444}
-.audio-preview audio{max-width:280px;border-radius:6px;height:36px}
-.image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
+.image-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.8rem}
 
-/* 錄音計時 */
-.recording-info{display:none;align-items:center;gap:0.5rem;margin-bottom:0.5rem;color:#ff6b6b;font-size:0.85rem}
-.recording-dot{width:8px;height:8px;border-radius:50%;background:#ff4444;animation:blink 1s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+/* 語音預覽 */
+.audio-preview{display:none;margin-bottom:0.5rem;position:relative;align-items:center;gap:0.6rem;flex-wrap:wrap;width:fit-content}
+.audio-preview audio{max-width:220px;flex-shrink:0}
+.audio-preview .discard{background:#8b2222;border:none;color:#fff;border-radius:6px;padding:0.35rem 0.8rem;font-size:0.75rem;cursor:pointer;flex-shrink:0;position:relative;z-index:2;pointer-events:auto;min-height:30px}
+.audio-preview .discard:hover{background:#a82b2b}
+.rec-timer{font-size:0.85rem;color:#ff6b6b;font-weight:600;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
 
 #inputArea{display:flex;gap:0.5rem;align-items:flex-end}
 .input-tools{display:flex;gap:0.3rem;flex-direction:column}
@@ -83,19 +84,17 @@ button{padding:0 1.2rem;background:#3670b9;color:white;border:none;border-radius
   <img id="previewImg">
   <span onclick="clearImage()">✕</span>
 </div>
-<div class="recording-info" id="recordingInfo">
-  <span class="recording-dot"></span>
-  <span>錄音中 <span id="timerDisplay">00:00</span></span>
-</div>
 <div class="audio-preview" id="audioPreview">
-  <audio id="previewAudio" controls>
-  <span onclick="clearAudio()">✕</span>
+  <audio id="audioEl" controls preload="metadata"></audio>
+  <span id="audioDuration" style="font-size:0.75rem;color:#999"></span>
+  <button class="discard" onclick="clearAudio()">捨棄</button>
 </div>
 <div id="inputArea">
   <div class="input-tools">
     <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
     <button onclick="document.getElementById('imageInput').click()">📎</button>
     <button id="recBtn" onclick="toggleRecord()">🎤</button>
+    <span id="recTimer" class="rec-timer" style="display:none">00:00</span>
     <input type="file" id="imageInput" accept="image/*" style="display:none">
   </div>
   <textarea id="msgInput" placeholder="寫訊息..."></textarea>
@@ -112,14 +111,22 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// ========== 時間格式化：指定台北時區，月-日 時:分 ==========
 function formatTime(isoString){
+  if(!isoString) return "";
   const date = new Date(isoString);
-  if (isNaN(date.getTime())) return isoString;
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${m}-${d} ${hh}:${mm}`;
+  if(isNaN(date.getTime())) return String(isoString);
+  const fmt = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hour12: false
+  });
+  const parts = fmt.formatToParts(date);
+  const get = t => (parts.find(p => p.type === t) || {}).value || "";
+  let hh = get("hour");
+  if(hh === "24") hh = "00";
+  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
 }
 
 // 通知 + 提示音
@@ -140,14 +147,26 @@ requestNotify();
 // 回覆狀態
 let currentReplyId = null;
 let currentImage = null;
-let currentAudio = null;
 
-// 錄音相關
+// 語音錄音狀態
 let recorder = null;
 let audioChunks = [];
-let stream = null;
-let timerInterval = null;
-let recordingSeconds = 0;
+let currentAudio = null;
+let micStream = null;
+let recTimerId = null;
+let recSeconds = 0;
+let audioDiscarded = false; // 點捨棄後，onstop 不再把音檔塞回預覽
+const MAX_REC_SECONDS = 60; // 最長錄音 60 秒，到點自動停止
+
+function fmtSec(s){
+  const m = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${m}:${ss}`;
+}
+function updateRecTimer(){
+  const el = document.getElementById("recTimer");
+  el.textContent = fmtSec(recSeconds);
+}
 
 // 訪客ID + 自動分配固定編號
 function getVisitorId(){
@@ -191,7 +210,6 @@ function switchRoom(newRoom){
   cancelReply();
   clearImage();
   clearAudio();
-  stopTimer();
   document.getElementById("btnGlobal").classList.toggle("active", roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", roomId === privateRoomId);
   loadMsg();
@@ -227,23 +245,23 @@ document.querySelectorAll("#emojiPanel span").forEach(el=>{
 document.getElementById("imageInput").onchange = async function(e){
   const file = e.target.files[0];
   if(!file) return;
-  
+
   const img = new Image();
   img.src = URL.createObjectURL(file);
   await new Promise(r=>img.onload = r);
-  
+
   const maxWidth = 800;
   let w = img.width, h = img.height;
   if(w > maxWidth){
     h = h * maxWidth / w;
     w = maxWidth;
   }
-  
+
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-  
+
   currentImage = canvas.toDataURL("image/jpeg", 0.8);
   document.getElementById("previewImg").src = currentImage;
   document.getElementById("imagePreview").style.display = "block";
@@ -256,74 +274,96 @@ function clearImage(){
   document.getElementById("previewImg").src = "";
 }
 
-// ===== 錄音 + 計時 + 刪除 =====
-function startTimer(){
-  recordingSeconds = 0;
-  updateTimerDisplay();
-  timerInterval = setInterval(()=>{
-    recordingSeconds++;
-    updateTimerDisplay();
+// ========== 語音錄音 ==========
+function startRecTimer(){
+  recSeconds = 0;
+  updateRecTimer();
+  document.getElementById("recTimer").style.display = "inline-block";
+  recTimerId = setInterval(()=>{
+    recSeconds++;
+    updateRecTimer();
+    if(recSeconds >= MAX_REC_SECONDS) toggleRecord(); // 到最長秒數自動停止
   }, 1000);
 }
-
-function stopTimer(){
-  if(timerInterval){
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  document.getElementById("recordingInfo").style.display = "none";
-}
-
-function updateTimerDisplay(){
-  const m = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
-  const s = String(recordingSeconds % 60).padStart(2, '0');
-  document.getElementById("timerDisplay").innerText = `${m}:${s}`;
+function stopRecTimer(){
+  if(recTimerId){ clearInterval(recTimerId); recTimerId = null; }
+  document.getElementById("recTimer").style.display = "none";
 }
 
 async function toggleRecord(){
-  if(!recorder){
-    try{
-      stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      recorder = new MediaRecorder(stream);
-      audioChunks = [];
-      recorder.ondataavailable = e=>{
-        audioChunks.push(e.data);
-      }
-      recorder.onstop = ()=>{
-        const blob = new Blob(audioChunks, {type:"audio/webm"});
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = ()=>{
-          currentAudio = reader.result;
-          document.getElementById("previewAudio").src = currentAudio;
-          document.getElementById("audioPreview").style.display = "block";
-        }
-        stream.getTracks().forEach(t=>t.stop());
-        stream = null;
-        recorder = null;
-        document.getElementById("recBtn").classList.remove("recording");
-        document.getElementById("recBtn").innerText = "🎤";
-        stopTimer();
-      }
-      recorder.start();
-      startTimer();
-      document.getElementById("recordingInfo").style.display = "flex";
-      document.getElementById("recBtn").classList.add("recording");
-      document.getElementById("recBtn").innerText = "⏹";
-    }catch(err){
-      alert("無法取得麥克風權限，請允許權限或是使用 HTTPS 網址");
-      console.error(err);
-    }
-  }else{
+  // 正在錄音 → 停止
+  if(recorder){
     recorder.stop();
+    return;
+  }
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
+    recorder = mime ? new MediaRecorder(micStream, { type: mime }) : new MediaRecorder(micStream);
+    audioChunks = [];
+
+    recorder.ondataavailable = e => { if(e.data && e.data.size) audioChunks.push(e.data); };
+
+    recorder.onstop = () => {
+      stopRecTimer();
+      const mime = recorder ? recorder.mimeType : "";
+      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+      recorder = null;
+      const btn = document.getElementById("recBtn");
+      btn.innerText = "🎤";
+      btn.classList.remove("recording");
+
+      // 若已按捨棄，不保留、不顯示這段音檔
+      if(audioDiscarded) return;
+
+      const blob = new Blob(audioChunks, { type: mime || "audio/webm" });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        currentAudio = reader.result;
+        const player = document.getElementById("audioEl");
+        player.src = currentAudio;
+        player.onloadedmetadata = () => {
+          const dur = Math.round(player.duration || recSeconds);
+          document.getElementById("audioDuration").textContent = fmtSec(dur);
+        };
+        document.getElementById("audioPreview").style.display = "flex";
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    audioDiscarded = false;
+    recorder.start();
+    startRecTimer();
+    const btn = document.getElementById("recBtn");
+    btn.innerText = "⏹";
+    btn.classList.add("recording");
+  }catch(err){
+    alert("無法取得麥克風權限，請允許麥克風權限後再試");
+    console.error(err);
+    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+    recorder = null;
+    stopRecTimer();
   }
 }
 
 function clearAudio(){
+  // 標記為捨棄：即使 onstop 稍後才觸發，也不會把音檔塞回預覽
+  audioDiscarded = true;
+  // 若還在錄音，一併停止
+  if(recorder){ try{ recorder.stop(); }catch(e){} }
+  stopRecTimer();
   currentAudio = null;
-  recordingSeconds = 0;
+  const player = document.getElementById("audioEl");
+  try{ player.pause(); }catch(e){}
+  player.removeAttribute("src");
+  player.load();
   document.getElementById("audioPreview").style.display = "none";
-  document.getElementById("previewAudio").src = "";
+  document.getElementById("audioDuration").textContent = "";
+  const btn = document.getElementById("recBtn");
+  btn.innerText = "🎤";
+  btn.classList.remove("recording");
 }
 
 // 回覆功能
@@ -347,11 +387,7 @@ window.addReaction = async function(msgId, emoji){
 
   updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
 
-  if(hasReacted){
-    delete record[key];
-  }else{
-    record[key] = true;
-  }
+  if(hasReacted){ delete record[key]; } else { record[key] = true; }
   setReactionRecord(record);
 
   try {
@@ -360,7 +396,6 @@ window.addReaction = async function(msgId, emoji){
       .select("reactions")
       .eq("id", msgId)
       .single();
-    
     if(selectErr) throw selectErr;
 
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
@@ -371,17 +406,12 @@ window.addReaction = async function(msgId, emoji){
       .from("messages")
       .update({ reactions: current })
       .eq("id", msgId);
-    
     if(updateErr) throw updateErr;
 
   } catch(e) {
     console.error("表情同步失敗：", e);
     updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted){
-      record[key] = true;
-    }else{
-      delete record[key];
-    }
+    if(hasReacted){ record[key] = true; } else { delete record[key]; }
     setReactionRecord(record);
   }
 }
@@ -393,7 +423,6 @@ function updateReactionDom(msgId, emoji, delta){
 
   let reactionsBox = msgEl.querySelector(".msg-reactions");
   let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
   let count = target ? parseInt(target.dataset.count) : 0;
   count += delta;
 
@@ -437,7 +466,7 @@ function renderChat(rows){
     }
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
-    
+
     const isAdmin = r.is_admin || r.sender_id === "admin";
     const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
@@ -454,13 +483,13 @@ function renderChat(rows){
     }
 
     if(r.audio){
-      div.innerHTML += `<audio controls><source src="${r.audio}">`;
+      div.innerHTML += `<audio controls preload="metadata"><source src="${r.audio}" type="audio/webm"></audio>`;
     }
-    
+
     if(r.content){
       div.innerHTML += `<div>${r.content}</div>`;
     }
-    
+
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -477,9 +506,9 @@ function renderChat(rows){
     barHtml += '</div>';
     div.innerHTML += barHtml;
 
-    const replyText = r.content ? r.content.replace(/'/g,"\\'") : "語音訊息";
+    const replyText = r.content ? r.content.replace(/'/g,"\\'") : "圖片/語音";
     div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
-    
+
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
@@ -498,22 +527,23 @@ async function loadMsg(){
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
   if(!text && !currentImage && !currentAudio) return;
-  
+
   const payload = {
-    room_id:roomId,
-    content:text,
-    is_admin:false,
+    room_id: roomId,
+    content: text,
+    is_admin: false,
     sender_id: visitorId,
     nickname: getNickname(),
+    // 前端直接產生時間（正確 UTC 時間戳），不依賴資料庫 now()
     created_at: new Date().toISOString()
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
   if(currentImage) payload.image = currentImage;
   if(currentAudio) payload.audio = currentAudio;
-  
-  const {error} = await sb.from("messages").insert([payload])
+
+  const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：", error);
-  
+
   document.getElementById("msgInput").value = "";
   cancelReply();
   clearImage();
