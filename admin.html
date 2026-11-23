@@ -19,7 +19,7 @@ h2{text-align:center;margin-bottom:1rem}
 .visitor{background:#272727;margin-right:auto}
 .admin{background:#203b58;margin-left:auto;text-align:right}
 .msg img{max-width:100%;border-radius:6px;margin:.3rem 0;display:block}
-.msg audio{max-width:100%;margin:.3rem 0;display:block}
+.msg audio{max-width:100%;margin:.3rem 0;display:block;height:32px}
 .msg-nick{font-size:.75rem;color:#8ab4f8;font-weight:500;margin-bottom:.2rem}
 .visitor .msg-nick{text-align:left}
 .reply-quote{font-size:.7rem;color:#aaa;border-left:2px solid #555;padding-left:.4rem;margin-bottom:.3rem;opacity:.8;text-align:left}
@@ -46,8 +46,11 @@ h2{text-align:center;margin-bottom:1rem}
 .reply-area{display:flex;gap:.5rem;align-items:flex-end}
 .image-preview,.audio-preview{display:none;margin-bottom:.4rem;position:relative}
 .image-preview img{max-width:100px;border-radius:6px;border:1px solid #444}
-.audio-preview audio{max-width:200px;border-radius:6px}
+.audio-preview audio{max-width:220px;border-radius:6px;height:32px}
 .image-preview span,.audio-preview span{position:absolute;top:-6px;right:-6px;background:#444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
+.recording-info{display:none;align-items:center;gap:0.4rem;margin-bottom:0.4rem;color:#ff6b6b;font-size:0.8rem}
+.recording-dot{width:7px;height:7px;border-radius:50%;background:#ff4444;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 .emoji-btn{padding:0 .6rem;background:#222;border:1px solid #444;color:#fff;border-radius:6px;cursor:pointer;font-size:1rem}
 .rec-btn.recording{background:#8b2222;border-color:#8b2222}
 .emoji-panel{display:none;gap:.4rem;padding:.5rem;background:#1e1e1e;border:1px solid #333;border-radius:6px;margin-bottom:.4rem;flex-wrap:wrap}
@@ -113,6 +116,8 @@ const roomAudio = {};
 const roomRecorder = {};
 const roomStream = {};
 const roomAudioChunks = {};
+const roomTimer = {};
+const roomSeconds = {};
 
 function getReactionRecord(){
   try {
@@ -158,6 +163,10 @@ async function loadAllRooms(){
         <div class="image-preview" id="imgPreview-${roomId}">
           <img id="imgPrev-${roomId}">
           <span onclick="clearRoomImage('${roomId}')">✕</span>
+        </div>
+        <div class="recording-info" id="recInfo-${roomId}">
+          <span class="recording-dot"></span>
+          <span>錄音中 <span id="roomTimer-${roomId}">00:00</span></span>
         </div>
         <div class="audio-preview" id="audioPreview-${roomId}">
           <audio id="audioPrev-${roomId}" controls>
@@ -224,7 +233,30 @@ function clearRoomImage(roomId){
   document.getElementById(`imgPreview-${roomId}`).style.display = "none";
 }
 
-// 房間錄音功能
+// ===== 後台每房獨立錄音 + 計時 =====
+function startRoomTimer(roomId){
+  roomSeconds[roomId] = 0;
+  updateRoomTimerDisplay(roomId);
+  roomTimer[roomId] = setInterval(()=>{
+    roomSeconds[roomId]++;
+    updateRoomTimerDisplay(roomId);
+  }, 1000);
+}
+
+function stopRoomTimer(roomId){
+  if(roomTimer[roomId]){
+    clearInterval(roomTimer[roomId]);
+    roomTimer[roomId] = null;
+  }
+  document.getElementById(`recInfo-${roomId}`).style.display = "none";
+}
+
+function updateRoomTimerDisplay(roomId){
+  const m = String(Math.floor(roomSeconds[roomId] / 60)).padStart(2, '0');
+  const s = String(roomSeconds[roomId] % 60).padStart(2, '0');
+  document.getElementById(`roomTimer-${roomId}`).innerText = `${m}:${s}`;
+}
+
 async function toggleRoomRecord(roomId){
   if(!roomRecorder[roomId]){
     try{
@@ -249,9 +281,12 @@ async function toggleRoomRecord(roomId){
         roomRecorder[roomId] = null;
         document.getElementById(`recBtn-${roomId}`).classList.remove("recording");
         document.getElementById(`recBtn-${roomId}`).innerText = "🎤";
+        stopRoomTimer(roomId);
       }
       recorder.start();
       roomRecorder[roomId] = recorder;
+      startRoomTimer(roomId);
+      document.getElementById(`recInfo-${roomId}`).style.display = "flex";
       document.getElementById(`recBtn-${roomId}`).classList.add("recording");
       document.getElementById(`recBtn-${roomId}`).innerText = "⏹";
     }catch(err){
@@ -265,7 +300,9 @@ async function toggleRoomRecord(roomId){
 
 function clearRoomAudio(roomId){
   roomAudio[roomId] = null;
+  roomSeconds[roomId] = 0;
   document.getElementById(`audioPreview-${roomId}`).style.display = "none";
+  document.getElementById(`audioPrev-${roomId}`).src = "";
 }
 
 function setRoomReply(roomId, msgId, content){
