@@ -31,15 +31,7 @@ h2::after{content:" 🎀"}
 .del-btn{background:#ffd0d8;border:none;color:#c0395a;padding:.25rem .6rem;border-radius:12px;cursor:pointer;font-size:.75rem;flex-shrink:0;margin-left:.8rem}
 .del-btn:hover{background:#ffb9c6}
 
-.msg a, .reply-quote a {
-  color: #e8839b;
-  text-decoration: underline;
-  word-break: break-all;
-}
-.msg a:hover, .reply-quote a:hover {
-  color: #d1607c;
-}
-
+/* 表情反應 */
 .msg-reactions{display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap;justify-content:flex-end}
 .visitor .msg-reactions{justify-content:flex-start}
 .reaction-item{background:#fff;border:1px solid #fbe4e8;border-radius:12px;padding:.1rem .45rem;font-size:.8rem;cursor:pointer}
@@ -76,6 +68,7 @@ textarea{flex:1;padding:.65rem;background:#fff;border:1px solid #fbe4e8;border-r
 textarea:focus{outline:none;border-color:#ffb6c1;box-shadow:0 0 0 3px rgba(255,182,193,.2)}
 button{padding:0 .9rem;background:linear-gradient(135deg,#ffb6c1,#ffc9a9);color:#fff;border:none;border-radius:14px;cursor:pointer;font-weight:600}
 
+/* 全站公告管理（固定 global，獨立於訊息房間） */
 .ann-admin{border:1px solid #f6dde2;border-radius:18px;background:#fff;padding:1rem;margin-bottom:1.2rem;box-shadow:0 4px 14px rgba(232,131,155,.10)}
 .ann-admin-title{color:#e8839b;font-weight:700;margin-bottom:.7rem}
 .ann-input-row{display:flex;gap:.5rem;align-items:flex-end;margin-bottom:.8rem}
@@ -94,6 +87,7 @@ button{padding:0 .9rem;background:linear-gradient(135deg,#ffb6c1,#ffc9a9);color:
 <body>
 <h2>管理後台</h2>
 
+<!-- 全站公告管理（前台「公告討論」頁讀取 global 公告） -->
 <div class="ann-admin">
   <div class="ann-admin-title">📢 全站公告（前台公告討論頁）</div>
   <div class="ann-input-row">
@@ -115,6 +109,24 @@ const ADMIN_NICKNAME = "口哈內";
 const GLOBAL_ROOM = "global";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// 話題板 room_id → 顯示名（與前台 TOPICS 對齊）
+// 注意：綜合大廳直接沿用舊的 global 房間，舊聊天記錄全部保留在這裡
+const TOPIC_LABELS = {
+  global: "🌐 綜合大廳",
+  topic_sing: "🎤 唱歌專屬",
+  topic_music: "🎵 音樂討論",
+  topic_genshin: "⚔️ 原神",
+  topic_pjsk: "🎹 世界計劃",
+  topic_mood: "🫂 心事分享",
+  topic_study: "📚 讀書學習區"
+};
+function roomLabel(roomId){
+  if(TOPIC_LABELS[roomId]) return TOPIC_LABELS[roomId];
+  if(roomId.startsWith("dm_admin_")) return "✉️ 專屬私信";
+  return roomId;
+}
+
+// ========== 時間格式化：指定台北時區，月-日 時:分 ==========
 function formatTime(isoString){
   if(!isoString) return "";
   const date = new Date(isoString);
@@ -132,17 +144,7 @@ function formatTime(isoString){
   return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
 }
 
-function linkify(text){
-  if(!text) return "";
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-  return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-}
-
+// 依 sender_id 生成固定編號
 function getVisitorNick(senderId){
   if(!senderId || senderId.trim() === "") return "匿名訪客";
   let hash = 0;
@@ -154,6 +156,7 @@ function getVisitorNick(senderId){
   return `訪客 #${num}`;
 }
 
+// 通知 + 提示音
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
   if (!("Notification" in window)) return false;
@@ -168,20 +171,35 @@ function showNotify(title, body) {
 }
 requestNotify();
 
+// HTML 跳脫與連結化
+function escapeHtml(str){
+  return String(str ?? "").replace(/[&<>"']/g, c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+function linkify(str){
+  return escapeHtml(str).replace(/(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function linkifyBr(str){
+  return linkify(str).replace(/\n/g, "<br>");
+}
+
 const roomOldestTime = {};
 const PAGE_SIZE = 30;
 const roomReply = {};
 const roomImage = {};
 const roomAudio = {};
 
+// 語音錄音狀態（單一後台同時只錄一則）
 let recorder = null;
 let audioChunks = [];
 let micStream = null;
 let recordingRoom = null;
 let recTimerId = null;
 let recSeconds = 0;
-let audioDiscarded = false;
-const MAX_REC_SECONDS = 60;
+let audioDiscarded = false; // 點捨棄後，onstop 不再把音檔塞回預覽
+const MAX_REC_SECONDS = 60; // 最長錄音 60 秒，到點自動停止
 
 function fmtSec(s){
   const m = String(Math.floor(s/60)).padStart(2,'0');
@@ -207,6 +225,7 @@ function stopRecTimer(){
   }
 }
 
+// 讀取本機表情紀錄
 function getReactionRecord(){
   try {
     return JSON.parse(localStorage.getItem("reaction_record") || "{}");
@@ -238,7 +257,7 @@ async function loadAllRooms(){
     roomDiv.className = "room";
     roomDiv.innerHTML = `
       <div class="room-header" onclick="toggleRoom('${roomId}')">
-        <div class="room-id">房間ID：${roomId}</div>
+        <div class="room-id">${TOPIC_LABELS[roomId] ? TOPIC_LABELS[roomId] + "　·　" + roomId : roomLabel(roomId)}</div>
         <div class="room-toggle" id="toggle-${roomId}">−</div>
       </div>
       <div class="room-body" id="body-${roomId}">
@@ -267,7 +286,7 @@ async function loadAllRooms(){
           <button class="emoji-btn rec-btn" id="recBtn-${roomId}" onclick="toggleRecord('${roomId}')">🎤</button>
           <span class="rec-timer" id="recTimer-${roomId}" style="display:none">00:00</span>
           <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
-          <textarea id="rep-${roomId}" placeholder="回覆訊息..." rows="2"></textarea>
+          <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
           <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
         </div>
       </div>`;
@@ -280,62 +299,40 @@ async function loadAllRooms(){
           document.getElementById(`rep-${roomId}`).focus();
         };
       });
-      document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
-        const file = e.target.files[0];
+      const pickImg = async (file)=>{
         if(!file) return;
         const img = new Image();
         img.src = URL.createObjectURL(file);
         await new Promise(r=>img.onload = r);
-
         const maxWidth = 800;
         let w = img.width, h = img.height;
-        if(w > maxWidth){
-          h = h * maxWidth / w;
-          w = maxWidth;
-        }
+        if(w > maxWidth){ h = h * maxWidth / w; w = maxWidth; }
         const canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-
         roomImage[roomId] = canvas.toDataURL("image/jpeg", 0.8);
         document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
         document.getElementById(`imgPreview-${roomId}`).style.display = "block";
+      };
+      document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
+        await pickImg(e.target.files[0]);
         e.target.value = "";
       };
-
-      document.getElementById(`rep-${roomId}`).addEventListener("paste", async function(e){
-        const items = e.clipboardData?.items;
-        if(!items) return;
-
-        for(const item of items){
-          if(item.type.startsWith("image/")){
-            e.preventDefault();
-            const file = item.getAsFile();
-            if(file){
-              const img = new Image();
-              img.src = URL.createObjectURL(file);
-              await new Promise(r=>img.onload = r);
-
-              const maxWidth = 800;
-              let w = img.width, h = img.height;
-              if(w > maxWidth){
-                h = h * maxWidth / w;
-                w = maxWidth;
-              }
-              const canvas = document.createElement("canvas");
-              canvas.width = w;
-              canvas.height = h;
-              canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-
-              roomImage[roomId] = canvas.toDataURL("image/jpeg", 0.8);
-              document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
-              document.getElementById(`imgPreview-${roomId}`).style.display = "block";
+      // 剪貼簿直接貼上圖片
+      const ta = document.getElementById(`rep-${roomId}`);
+      if(ta){
+        ta.addEventListener("paste", async function(e){
+          const items = (e.clipboardData && e.clipboardData.items) || [];
+          for(const item of items){
+            if(item.type && item.type.startsWith("image/")){
+              e.preventDefault();
+              await pickImg(item.getAsFile());
+              break;
             }
-            break;
           }
-        }
-      });
+        });
+      }
     },0);
 
     await loadRoomMsg(roomId, true);
@@ -353,7 +350,9 @@ function clearRoomImage(roomId){
 }
 
 function clearRoomAudio(roomId){
+  // 標記為捨棄：即使 onstop 稍後才觸發，也不會把音檔塞回預覽
   audioDiscarded = true;
+  // 若還在錄音，一併停止
   if(recorder){ try{ recorder.stop(); }catch(e){} }
   stopRecTimer();
   roomAudio[roomId] = null;
@@ -366,7 +365,33 @@ function clearRoomAudio(roomId){
   if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
 }
 
+// ========== 語音錄音 ==========
+function micErrorText(err){
+  if(!navigator.mediaDevices || !window.MediaRecorder){
+    return "目前瀏覽器或開啟方式不支援錄音。請改用 Chrome / Edge / Safari 最新版，並從 HTTPS 網站或 localhost 開啟；本機直接打開 HTML 檔（file://）會被瀏覽器擋住麥克風。";
+  }
+  switch(err && err.name){
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+      return "麥克風權限被拒絕。請點網址列左邊的鎖頭圖示，把麥克風設為「允許」後重新整理再試。";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "找不到可用的麥克風裝置。請確認麥克風已接上，並在電腦聲音設定裡把預設輸入裝置選對。";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "麥克風被其他程式占用中。請先關閉其他正在使用麥克風的視訊／語音軟體，再回來錄。";
+    case "OverconstrainedError":
+      return "麥克風裝置設定不符，請更換電腦預設輸入裝置後再試。";
+    default:
+      return "錄音失敗：" + (err && err.message ? err.message : "未知錯誤");
+  }
+}
+
 async function toggleRecord(roomId){
+  if(!navigator.mediaDevices || !window.MediaRecorder){
+    alert(micErrorText());
+    return;
+  }
   if(recorder){
     recorder.stop();
     return;
@@ -392,6 +417,7 @@ async function toggleRecord(roomId){
       if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
       recordingRoom = null;
 
+      // 若已按捨棄，不保留、不顯示這段音檔
       if(audioDiscarded) return;
 
       const blob = new Blob(audioChunks, { type: mime || "audio/webm" });
@@ -417,11 +443,13 @@ async function toggleRecord(roomId){
     btn.innerText = "⏹";
     btn.classList.add("recording");
   }catch(err){
-    alert("無法取得麥克風權限，請允許麥克風權限後再試");
+    alert(micErrorText(err));
     console.error(err);
     if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
     recorder = null;
     stopRecTimer();
+    const btn = document.getElementById(`recBtn-${roomId}`);
+    if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
   }
 }
 
@@ -438,6 +466,7 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
+// 表情反應：樂觀更新，不跳動
 window.addReaction = async function(roomId, msgId, emoji){
   try {
     const record = getReactionRecord();
@@ -565,8 +594,8 @@ function createMsgElement(roomId, m, allRows){
   if(m.reply_to){
     const target = allRows ? allRows.find(x=>x.id === m.reply_to) : null;
     const quoteText = target ? target.content : "已刪除的訊息";
-    const short = linkify(quoteText.length > 18 ? quoteText.slice(0,18)+"..." : quoteText);
-    inner += `<div class="reply-quote">↩ ${short}</div>`;
+    const short = quoteText.length > 18 ? quoteText.slice(0,18)+"..." : quoteText;
+    inner += `<div class="reply-quote">↩ ${linkify(short)}</div>`;
   }
 
   if(m.image){
@@ -639,6 +668,7 @@ async function sendAdminMsg(roomId){
     is_admin: true,
     sender_id: ADMIN_SENDER_ID,
     nickname: ADMIN_NICKNAME,
+    // 前端直接產生時間（正確 UTC 時間戳），不依賴資料庫 now()
     created_at: new Date().toISOString()
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
@@ -655,6 +685,7 @@ async function sendAdminMsg(roomId){
   setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
+// ========== 全站公告管理（固定 global） ==========
 async function loadAdminAnnouncements(){
   const listEl = document.getElementById("annList");
   if(!listEl) return;
@@ -688,7 +719,7 @@ async function loadAdminAnnouncements(){
           <button class="ann-btn-danger" onclick="deleteAnnouncement('${ann.id}')">刪除</button>
         </div>
       </div>
-      <div class="ann-item-content">${linkify(ann.content||"").replace(/\n/g,"<br>")}</div>
+      <div class="ann-item-content">${linkifyBr(ann.content||"")}</div>
       <div class="ann-reply-count">💬 ${allow ? "開放留言" : "已關閉留言"}</div>
     `;
     listEl.appendChild(item);
@@ -790,6 +821,7 @@ function updateReactionDomFull(roomId, msgId, reactions){
 loadAllRooms();
 loadAdminAnnouncements();
 
+// 公告即時同步：後台公告有變動就刷新列表
 sb.channel("ann-admin")
   .on("postgres_changes",{event:"*",schema:"public",table:"announcements"},()=>loadAdminAnnouncements())
   .subscribe();
