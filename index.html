@@ -127,7 +127,15 @@ h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-s
 }
 .reply-status span{cursor:pointer;color:#b08a80;margin-left:0.5rem}
 
-/* 表情反應 */
+.msg a, .reply-quote a {
+  color: #d47a6a;
+  text-decoration: underline;
+  word-break: break-all;
+}
+.msg a:hover, .reply-quote a:hover {
+  color: #b85c4c;
+}
+
 .msg-reactions{display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap;justify-content:flex-end}
 .other .msg-reactions{justify-content:flex-start}
 .reaction-item{
@@ -152,7 +160,6 @@ h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-s
 .msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem;transition:transform 0.2s}
 .msg-reaction-bar span:hover{transform:scale(1.2)}
 
-/* 預覽區塊 */
 .image-preview,.audio-preview{display:none;margin-bottom:0.6rem;position:relative;width:fit-content}
 .image-preview img{max-width:120px;border-radius:10px;border:1px solid #ffd4c8}
 .audio-preview audio{max-width:280px;border-radius:10px;height:36px}
@@ -165,7 +172,6 @@ h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-s
   box-shadow:0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* 錄音計時 */
 .recording-info{
   display:none;align-items:center;gap:0.5rem;
   margin-bottom:0.6rem;color:#e06666;
@@ -233,7 +239,6 @@ button.send-btn{
 }
 button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,154,139,0.35)}
 
-/* 公告區樣式 */
 .ann-card{
   background:#fff;
   border:1px solid #ffd9cc;
@@ -281,7 +286,6 @@ button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,
   height:36px;padding:0 0.8rem;border-radius:10px;font-size:0.85rem;
 }
 
-/* 滾動條美化 */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:#fff5f2;border-radius:3px}
 ::-webkit-scrollbar-thumb{background:#ffd4c8;border-radius:3px}
@@ -366,7 +370,7 @@ button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,
     <button id="recBtn" onclick="toggleRecord()" title="錄音">🎤</button>
     <input type="file" id="imageInput" accept="image/*" style="display:none">
   </div>
-  <textarea id="msgInput" placeholder="寫訊息..." rows="2"></textarea>
+  <textarea id="msgInput" placeholder="寫訊息... 支援文字、圖片、錄音，網址會自動變成連結" rows="2"></textarea>
   <button class="send-btn" onclick="sendMsg()">送出</button>
 </div>
 
@@ -380,17 +384,15 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-let currentView = "announcement"; // announcement / topiclist / chat
+let currentView = "announcement";
 let roomId;
 let roomShowName = "";
 let channel = null;
 
-// 回覆狀態
 let currentReplyId = null;
 let currentImage = null;
 let currentAudio = null;
 
-// 錄音相關
 let recorder = null;
 let audioChunks = [];
 let stream = null;
@@ -398,7 +400,6 @@ let timerInterval = null;
 let recordingSeconds = 0;
 let audioDiscarded = false;
 
-// 訪客ID
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
   if(!vid){
@@ -420,7 +421,6 @@ function getNickname(){
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
-// 時間格式化
 function formatTime(isoString){
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return isoString;
@@ -431,7 +431,17 @@ function formatTime(isoString){
   return `${m}-${d} ${hh}:${mm}`;
 }
 
-// 通知音效
+function linkify(text){
+  if(!text) return "";
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
   if (!("Notification" in window)) return false;
@@ -446,7 +456,6 @@ function showNotify(title, body) {
 }
 requestNotify();
 
-// 讀取表情紀錄
 function getReactionRecord(){
   try {
     return JSON.parse(localStorage.getItem("reaction_record") || "{}");
@@ -458,7 +467,6 @@ function setReactionRecord(record){
   localStorage.setItem("reaction_record", JSON.stringify(record));
 }
 
-// 切換檢視模式
 function switchView(view){
   currentView = view;
   document.getElementById("announcementBox").style.display = view === "announcement" ? "block" : "none";
@@ -516,7 +524,6 @@ document.getElementById("btnAnnouncement").onclick = ()=>switchView("announcemen
 document.getElementById("btnTopic").onclick = ()=>switchView("topiclist");
 document.getElementById("btnPrivate").onclick = ()=>switchPrivateRoom();
 
-// 初始化
 const urlParams = new URLSearchParams(location.search);
 const urlRoom = urlParams.get("room");
 if(urlRoom){
@@ -526,7 +533,6 @@ if(urlRoom){
   switchView("announcement");
 }
 
-// 表情面板
 function toggleEmoji(){
   const panel = document.getElementById("emojiPanel");
   panel.style.display = panel.style.display === "flex" ? "none" : "flex";
@@ -538,9 +544,7 @@ document.querySelectorAll("#emojiPanel span").forEach(el=>{
   }
 })
 
-// 圖片上傳
-document.getElementById("imageInput").onchange = async function(e){
-  const file = e.target.files[0];
+async function handleImageFile(file){
   if(!file) return;
   
   const img = new Image();
@@ -562,8 +566,28 @@ document.getElementById("imageInput").onchange = async function(e){
   currentImage = canvas.toDataURL("image/jpeg", 0.8);
   document.getElementById("previewImg").src = currentImage;
   document.getElementById("imagePreview").style.display = "block";
+}
+
+document.getElementById("imageInput").onchange = async function(e){
+  await handleImageFile(e.target.files[0]);
   e.target.value = "";
 }
+
+document.getElementById("msgInput").addEventListener("paste", async function(e){
+  const items = e.clipboardData?.items;
+  if(!items) return;
+
+  for(const item of items){
+    if(item.type.startsWith("image/")){
+      e.preventDefault();
+      const file = item.getAsFile();
+      if(file){
+        await handleImageFile(file);
+      }
+      break;
+    }
+  }
+});
 
 function clearImage(){
   currentImage = null;
@@ -571,7 +595,6 @@ function clearImage(){
   document.getElementById("previewImg").src = "";
 }
 
-// 錄音功能
 function startTimer(){
   recordingSeconds = 0;
   updateTimerDisplay();
@@ -647,7 +670,6 @@ function clearAudio(){
   audioEl.src = "";
 }
 
-// 回覆功能
 function setReply(msgId, content){
   currentReplyId = msgId;
   document.getElementById("replyText").innerText =
@@ -660,7 +682,6 @@ function cancelReply(){
   document.getElementById("replyStatus").style.display = "none";
 }
 
-// 表情反應
 window.addReaction = async function(msgId, emoji){
   const record = getReactionRecord();
   const key = `${msgId}_${emoji}`;
@@ -745,7 +766,6 @@ function updateReactionDom(msgId, emoji, delta){
   }
 }
 
-// 渲染聊天
 function renderChat(rows){
   const box = document.getElementById("chatBox");
   box.innerHTML = "";
@@ -766,7 +786,7 @@ function renderChat(rows){
     if(r.reply_to){
       const target = rows.find(x=>x.id === r.reply_to);
       const quoteText = target ? target.content : "已刪除的訊息";
-      const short = quoteText.length > 20 ? quoteText.slice(0,20)+"..." : quoteText;
+      const short = linkify(quoteText.length > 20 ? quoteText.slice(0,20)+"..." : quoteText);
       div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
     }
 
@@ -779,7 +799,7 @@ function renderChat(rows){
     }
     
     if(r.content){
-      div.innerHTML += `<div>${r.content}</div>`;
+      div.innerHTML += `<div>${linkify(r.content)}</div>`;
     }
     
     if(r.reactions && Object.keys(r.reactions).length > 0){
@@ -799,7 +819,7 @@ function renderChat(rows){
     div.innerHTML += barHtml;
 
     const replyText = r.content ? r.content.replace(/'/g,"\\'") : "語音訊息";
-    div.innerHTML += `<button class="reply-btn" onclick="setReply('${r.id}', '${replyText}')">回覆</button>`;
+    div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
     
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
@@ -884,7 +904,6 @@ function updateReactionDomFull(msgId, reactions){
   }
 }
 
-// ========== 公告區功能 ==========
 async function loadAnnouncements(){
   const box = document.getElementById("announcementBox");
   box.innerHTML = '<div style="text-align:center;color:#c9a79e;padding:2rem">載入中...</div>';
@@ -915,7 +934,7 @@ async function loadAnnouncements(){
         <div class="ann-title">📢 公告</div>
         <div class="ann-time">${formatTime(ann.created_at)}</div>
       </div>
-      <div class="ann-content">${ann.content.replace(/\n/g,'<br>')}</div>
+      <div class="ann-content">${linkify(ann.content).replace(/\n/g,'<br>')}</div>
       <div class="ann-reply-toggle" onclick="toggleReplies('${ann.id}')">
         ${ann.allow_reply ? '💬 查看/發表回應' : '🔒 已關閉回應'}
       </div>
@@ -960,7 +979,7 @@ async function loadAnnReplies(annId){
     item.className = "reply-item";
     item.innerHTML = `
       <div class="reply-nick">${rep.nickname}</div>
-      <div>${rep.content.replace(/\n/g,'<br>')}</div>
+      <div>${linkify(rep.content).replace(/\n/g,'<br>')}</div>
       <div class="reply-time">${formatTime(rep.created_at)}</div>
     `;
     listEl.appendChild(item);
