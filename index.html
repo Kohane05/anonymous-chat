@@ -267,13 +267,13 @@ button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,
 <body>
 <h2>匿名私信</h2>
 <div class="tab">
+  <button id="btnAnnouncement" class="active">📢 公告討論</button>
   <button id="btnGlobal">🌐 公開大廳</button>
-  <button id="btnAnnouncement">📢 公告討論</button>
   <button id="btnPrivate">✉️ 專屬私信</button>
 </div>
 
-<div id="chatBox"></div>
 <div id="announcementBox"></div>
+<div id="chatBox"></div>
 
 <div class="reply-status" id="replyStatus">
   回覆：<span id="replyText"></span>
@@ -321,7 +321,7 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-let currentView = "chat"; // chat / announcement
+let currentView = "announcement"; // announcement / chat
 let roomId;
 let channel = null;
 
@@ -410,8 +410,8 @@ function switchView(view){
   document.getElementById("recordingInfo").style.display = "none";
   document.getElementById("replyStatus").style.display = "none";
   
-  document.getElementById("btnGlobal").classList.toggle("active", view === "chat" && roomId === GLOBAL_ROOM);
   document.getElementById("btnAnnouncement").classList.toggle("active", view === "announcement");
+  document.getElementById("btnGlobal").classList.toggle("active", view === "chat" && roomId === GLOBAL_ROOM);
   document.getElementById("btnPrivate").classList.toggle("active", view === "chat" && roomId === privateRoomId);
 
   if(view === "announcement"){
@@ -432,8 +432,8 @@ function switchRoom(newRoom){
   switchView("chat");
 }
 
-document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
 document.getElementById("btnAnnouncement").onclick = ()=>switchView("announcement");
+document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
 document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
 
 // 初始化
@@ -441,10 +441,11 @@ const urlParams = new URLSearchParams(location.search);
 const urlRoom = urlParams.get("room");
 if(urlRoom){
   roomId = urlRoom;
+  switchView("chat");
 }else{
   roomId = privateRoomId;
+  switchView("announcement");
 }
-switchView("chat");
 
 // 表情面板
 function toggleEmoji(){
@@ -816,7 +817,8 @@ async function loadAnnouncements(){
     .order("created_at",{ascending:false});
 
   if(error){
-    box.innerHTML = '<div style="text-align:center;color:#e06666;padding:2rem">載入公告失敗</div>';
+    console.error("公告載入失敗：", error);
+    box.innerHTML = '<div style="text-align:center;color:#e06666;padding:2rem">載入公告失敗，請稍後再試</div>';
     return;
   }
 
