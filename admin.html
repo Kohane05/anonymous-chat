@@ -24,7 +24,7 @@ h2::after{content:" 🎀"}
 .admin small{color:#8a5a63}
 .msg img{max-width:100%;border-radius:12px;margin:.3rem 0;display:block}
 
-/* 自訂音訊播放（無下載） */
+/* 自訂音訊播放（無下載 + 錯誤提示） */
 .audio-player{display:flex;align-items:center;gap:0.6rem;margin:0.3rem 0}
 .audio-play-btn{
   width:30px;height:30px;border-radius:50%;border:none;
@@ -35,6 +35,7 @@ h2::after{content:" 🎀"}
 .admin .audio-play-btn{background:#fff;color:#e8839b}
 .audio-duration{font-size:0.75rem;color:#a88b8f;min-width:40px}
 .admin .audio-duration{color:#7a3b48}
+.audio-error{font-size:0.75rem;color:#e06666;padding:0.2rem 0}
 
 .msg-nick{font-size:.75rem;color:#e8839b;font-weight:600;margin-bottom:.2rem}
 .visitor .msg-nick{text-align:left}
@@ -131,6 +132,36 @@ const ADMIN_NICKNAME = "口哈內";
 const GLOBAL_ROOM = "global";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+const roomOldestTime = {};
+const PAGE_SIZE = 30;
+const roomReply = {};
+const roomImage = {};
+const roomAudioDataUrl = {}; // 改存永久 dataURL
+
+let recorder = null;
+let audioChunks = [];
+let micStream = null;
+let recordingRoom = null;
+let recTimerId = null;
+let recSeconds = 0;
+let audioDiscarded = false;
+const MAX_REC_SECONDS = 60;
+let recordMimeType = "";
+
+// 自動偵測最相容的錄音格式
+function getSupportedMimeType(){
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac",
+  ];
+  for(const t of types){
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
 function formatTime(isoString){
   if(!isoString) return "";
   const date = new Date(isoString);
@@ -183,21 +214,6 @@ function showNotify(title, body) {
   notifyAudio.play().catch(()=>{});
 }
 requestNotify();
-
-const roomOldestTime = {};
-const PAGE_SIZE = 30;
-const roomReply = {};
-const roomImage = {};
-const roomAudio = {};
-
-let recorder = null;
-let audioChunks = [];
-let micStream = null;
-let recordingRoom = null;
-let recTimerId = null;
-let recSeconds = 0;
-let audioDiscarded = false;
-const MAX_REC_SECONDS = 60;
 
 function fmtSec(s){
   const m = String(Math.floor(s/60)).padStart(2,'0');
@@ -372,15 +388,15 @@ function clearRoomAudio(roomId){
   audioDiscarded = true;
   if(recorder){ try{ recorder.stop(); }catch(e){} }
   stopRecTimer();
-  roomAudio[roomId] = null;
-  
-  const preview = window[`previewAudio_${roomId}`];
-  if(preview){ try{ preview.pause(); }catch(e){} }
-  
+  roomAudioDataUrl[roomId] = null;
+
+  const key = `previewAudio_${roomId}`;
+  if(window[key]){ try{ window[key].pause(); }catch(e){} }
+
   document.getElementById(`audioPreview-${roomId}`).style.display = "none";
   document.getElementById(`audioDur-${roomId}`).textContent = "";
   document.getElementById(`previewPlay-${roomId}`).textContent = "▶";
-  
+
   const btn = document.getElementById(`recBtn-${roomId}`);
   if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
 }
@@ -388,7 +404,7 @@ function clearRoomAudio(roomId){
 function togglePreviewAudio(roomId){
   const key = `previewAudio_${roomId}`;
   if(!window[key]) return;
-  
+
   if(window[key].paused){
     window[key].play();
     document.getElementById(`previewPlay-${roomId}`).textContent = "⏸";
@@ -408,10 +424,11 @@ async function toggleRecord(roomId){
   }
   try{
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
-    recorder = mime ? new MediaRecorder(micStream, { type: mime }) : new MediaRecorder(micStream);
+    recordMimeType = getSupportedMimeType();
+    recorder = recordMimeType
+      ? new MediaRecorder(micStream, { mimeType: recordMimeType })
+      : new MediaRecorder(micStream);
+
     audioChunks = [];
     recordingRoom = roomId;
 
@@ -430,15 +447,23 @@ async function toggleRecord(roomId){
       if(audioDiscarded) return;
 
       const blob = new Blob(audioChunks, { type: mime || "audio/webm" });
-      roomAudio[stoppedRoom] = blob;
-      
-      const key = `previewAudio_${stoppedRoom}`;
-      window[key] = new Audio(URL.createObjectURL(blob));
-      window[key].onloadedmetadata = ()=>{
-        const dur = Math.ceil(window[key].duration || recSeconds);
-        document.getElementById(`audioDur-${stoppedRoom}`).textContent = fmtSec(dur);
+      // 轉成永久 dataURL 存進資料庫，不再用暫存 blob 連結
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        roomAudioDataUrl[stoppedRoom] = reader.result;
+
+        const key = `previewAudio_${stoppedRoom}`;
+        window[key] = new Audio(roomAudioDataUrl[stoppedRoom]);
+        window[key].onloadedmetadata = ()=>{
+          const dur = Math.ceil(window[key].duration || recSeconds);
+          document.getElementById(`audioDur-${stoppedRoom}`).textContent = fmtSec(dur);
+        };
+        window[key].onerror = ()=>{
+          document.getElementById(`audioDur-${stoppedRoom}`).textContent = "格式不相容";
+        };
+        document.getElementById(`audioPreview-${stoppedRoom}`).style.display = "flex";
       };
-      document.getElementById(`audioPreview-${stoppedRoom}`).style.display = "flex";
+      reader.readAsDataURL(blob);
     };
 
     audioDiscarded = false;
@@ -610,11 +635,12 @@ function createMsgElement(roomId, m, allRows){
     inner += `<img src="${m.image}" alt="圖片">`;
   }
 
-  // 自訂音訊播放器（無下載）
+  // 自訂音訊播放器（無下載 + 錯誤處理）
   if(m.audio){
+    const playerId = `audio_${roomId}_${m.id}`;
     inner += `
-    <div class="audio-player">
-      <button class="audio-play-btn" onclick="playMsgAudio(this, '${m.audio}')">▶</button>
+    <div class="audio-player" id="${playerId}">
+      <button class="audio-play-btn" data-src="${m.audio}">▶</button>
       <span class="audio-duration">--:--</span>
     </div>`;
   }
@@ -643,40 +669,39 @@ function createMsgElement(roomId, m, allRows){
   `;
 
   div.innerHTML = inner;
+
+  // 繫結播放事件與錯誤處理
+  if(m.audio){
+    const playerWrap = document.getElementById(`audio_${roomId}_${m.id}`);
+    const btn = playerWrap.querySelector(".audio-play-btn");
+    const dur = playerWrap.querySelector(".audio-duration");
+    let audioObj = null;
+
+    btn.onclick = ()=>{
+      if(!audioObj){
+        audioObj = new Audio(btn.dataset.src);
+        audioObj.onloadedmetadata = ()=>{
+          const d = Math.ceil(audioObj.duration);
+          dur.textContent = fmtSec(d);
+        };
+        audioObj.onerror = ()=>{
+          playerWrap.innerHTML = '<div class="audio-error">⚠ 此錄音格式與您的裝置不相容</div>';
+        };
+        audioObj.onended = ()=>{
+          btn.textContent = "▶";
+        };
+      }
+      if(audioObj.paused){
+        audioObj.play();
+        btn.textContent = "⏸";
+      }else{
+        audioObj.pause();
+        btn.textContent = "▶";
+      }
+    };
+  }
+
   return div;
-}
-
-// 播放訊息語音
-let currentPlayingBtn = null;
-function playMsgAudio(btn, src){
-  if(currentPlayingBtn && currentPlayingBtn !== btn){
-    currentPlayingBtn.textContent = "▶";
-  }
-  
-  if(btn._audio && !btn._audio.paused){
-    btn._audio.pause();
-    btn.textContent = "▶";
-    currentPlayingBtn = null;
-    return;
-  }
-
-  if(!btn._audio){
-    btn._audio = new Audio(src);
-    btn._audio.onended = ()=>{
-      btn.textContent = "▶";
-      currentPlayingBtn = null;
-    };
-    btn._audio.onloadedmetadata = ()=>{
-      const dur = Math.ceil(btn._audio.duration);
-      const m = String(Math.floor(dur/60)).padStart(2,'0');
-      const s = String(dur%60).padStart(2,'0');
-      btn.nextElementSibling.textContent = `${m}:${s}`;
-    };
-  }
-  
-  btn._audio.play();
-  btn.textContent = "⏸";
-  currentPlayingBtn = btn;
 }
 
 async function loadMoreMsg(roomId){
@@ -706,7 +731,7 @@ async function delMsg(roomId, id){
 
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
-  if(!txt && !roomImage[roomId] && !roomAudio[roomId]) return;
+  if(!txt && !roomImage[roomId] && !roomAudioDataUrl[roomId]) return;
 
   const payload = {
     room_id: roomId,
@@ -718,7 +743,7 @@ async function sendAdminMsg(roomId){
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   if(roomImage[roomId]) payload.image = roomImage[roomId];
-  if(roomAudio[roomId]) payload.audio = URL.createObjectURL(roomAudio[roomId]);
+  if(roomAudioDataUrl[roomId]) payload.audio = roomAudioDataUrl[roomId];
 
   const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：",error);
