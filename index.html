@@ -36,6 +36,30 @@ h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-s
 }
 .tab button:hover{transform:translateY(-1px)}
 
+.topic-list{display:none;gap:0.8rem;flex-wrap:wrap;margin-bottom:1rem}
+.topic-card{
+  width:calc(50% - 0.4rem);
+  background:#fff;
+  border:1px solid #ffd4c8;
+  border-radius:16px;
+  padding:1rem 0.8rem;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  box-shadow:0 2px 6px rgba(212,122,106,0.06);
+}
+.topic-card:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(212,122,106,0.12)}
+.topic-card .topic-emoji{font-size:1.8rem;margin-bottom:0.4rem}
+.topic-card .topic-name{font-weight:600;color:#a86558;font-size:0.95rem}
+
+.room-header-bar{display:none;align-items:center;gap:0.6rem;margin-bottom:1rem}
+.back-topic-btn{
+  background:#fff;border:1px solid #ffd4c8;color:#a86558;
+  padding:0.4rem 0.7rem;border-radius:12px;cursor:pointer;font-size:0.85rem
+}
+.back-topic-btn:hover{background:#fff0eb}
+.room-title{font-weight:600;color:#d47a6a}
+
 #chatBox, #announcementBox{
   border:1px solid #ffd9cc;
   border-radius:18px;
@@ -268,11 +292,46 @@ button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,
 <h2>匿名私信</h2>
 <div class="tab">
   <button id="btnAnnouncement" class="active">📢 公告討論</button>
-  <button id="btnGlobal">🌐 公開大廳</button>
+  <button id="btnTopic">💬 話題討論</button>
   <button id="btnPrivate">✉️ 專屬私信</button>
 </div>
 
 <div id="announcementBox"></div>
+<div class="topic-list" id="topicList">
+  <div class="topic-card" onclick="enterTopic('global','🌐 綜合大廳')">
+    <div class="topic-emoji">🌐</div>
+    <div class="topic-name">綜合大廳</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_sing','🎤 唱歌專屬')">
+    <div class="topic-emoji">🎤</div>
+    <div class="topic-name">唱歌專屬</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_music','🎵 音樂討論')">
+    <div class="topic-emoji">🎵</div>
+    <div class="topic-name">音樂討論</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_genshin','⚔️ 原神')">
+    <div class="topic-emoji">⚔️</div>
+    <div class="topic-name">原神</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_pjsk','🎹 世界計劃')">
+    <div class="topic-emoji">🎹</div>
+    <div class="topic-name">世界計劃</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_mood','🫂 心事分享')">
+    <div class="topic-emoji">🫂</div>
+    <div class="topic-name">心事分享</div>
+  </div>
+  <div class="topic-card" onclick="enterTopic('topic_study','📚 讀書學習區')">
+    <div class="topic-emoji">📚</div>
+    <div class="topic-name">讀書學習區</div>
+  </div>
+</div>
+
+<div class="room-header-bar" id="roomHeaderBar">
+  <button class="back-topic-btn" onclick="backToTopicList()">← 返回話題</button>
+  <div class="room-title" id="roomTitle"></div>
+</div>
 <div id="chatBox"></div>
 
 <div class="reply-status" id="replyStatus">
@@ -296,7 +355,7 @@ button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,
 </div>
 
 <div class="audio-preview" id="audioPreview">
-  <audio id="previewAudio" controls></audio>
+  <audio id="previewAudio" controls>
   <span class="close-btn" onclick="clearAudio()">✕</span>
 </div>
 
@@ -321,8 +380,9 @@ const ADMIN_PREFIX = "dm_admin_";
 const ADMIN_DISPLAY_NAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-let currentView = "announcement"; // announcement / chat
+let currentView = "announcement"; // announcement / topiclist / chat
 let roomId;
+let roomShowName = "";
 let channel = null;
 
 // 回覆狀態
@@ -360,20 +420,15 @@ function getNickname(){
 const visitorId = getVisitorId();
 const privateRoomId = ADMIN_PREFIX + visitorId;
 
-// 時間格式化（台北 UTC+8）
+// 時間格式化
 function formatTime(isoString){
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return isoString;
-  const fmt = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false
-  });
-  const parts = fmt.formatToParts(date);
-  const get = t => (parts.find(p => p.type === t) || {}).value || "";
-  let hh = get("hour");
-  if(hh === "24") hh = "00";
-  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${m}-${d} ${hh}:${mm}`;
 }
 
 // 通知音效
@@ -406,30 +461,50 @@ function setReactionRecord(record){
 // 切換檢視模式
 function switchView(view){
   currentView = view;
-  document.getElementById("chatBox").style.display = view === "chat" ? "block" : "none";
   document.getElementById("announcementBox").style.display = view === "announcement" ? "block" : "none";
+  document.getElementById("topicList").style.display = view === "topiclist" ? "flex" : "none";
+  document.getElementById("chatBox").style.display = view === "chat" ? "block" : "none";
+  document.getElementById("roomHeaderBar").style.display = (view === "chat" && roomId !== privateRoomId) ? "flex" : "none";
   document.getElementById("inputArea").style.display = view === "chat" ? "flex" : "none";
   document.getElementById("emojiPanel").style.display = "none";
   document.getElementById("imagePreview").style.display = "none";
   document.getElementById("audioPreview").style.display = "none";
   document.getElementById("recordingInfo").style.display = "none";
   document.getElementById("replyStatus").style.display = "none";
-
+  
   document.getElementById("btnAnnouncement").classList.toggle("active", view === "announcement");
-  document.getElementById("btnGlobal").classList.toggle("active", view === "chat" && roomId === GLOBAL_ROOM);
+  document.getElementById("btnTopic").classList.toggle("active", view === "topiclist");
   document.getElementById("btnPrivate").classList.toggle("active", view === "chat" && roomId === privateRoomId);
 
   if(view === "announcement"){
     loadAnnouncements();
-  }else{
+  }else if(view === "chat"){
     loadMsg();
     subscribeRealtime();
   }
 }
 
-// 切換聊天室
-function switchRoom(newRoom){
-  roomId = newRoom;
+function enterTopic(tid, tname){
+  roomId = tid;
+  roomShowName = tname;
+  document.getElementById("roomTitle").innerText = roomShowName;
+  cancelReply();
+  clearImage();
+  clearAudio();
+  stopTimer();
+  switchView("chat");
+}
+function backToTopicList(){
+  cancelReply();
+  clearImage();
+  clearAudio();
+  stopTimer();
+  switchView("topiclist");
+}
+
+function switchPrivateRoom(){
+  roomId = privateRoomId;
+  roomShowName = "專屬私信";
   cancelReply();
   clearImage();
   clearAudio();
@@ -438,8 +513,8 @@ function switchRoom(newRoom){
 }
 
 document.getElementById("btnAnnouncement").onclick = ()=>switchView("announcement");
-document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
-document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
+document.getElementById("btnTopic").onclick = ()=>switchView("topiclist");
+document.getElementById("btnPrivate").onclick = ()=>switchPrivateRoom();
 
 // 初始化
 const urlParams = new URLSearchParams(location.search);
@@ -448,7 +523,6 @@ if(urlRoom){
   roomId = urlRoom;
   switchView("chat");
 }else{
-  roomId = privateRoomId;
   switchView("announcement");
 }
 
@@ -468,23 +542,23 @@ document.querySelectorAll("#emojiPanel span").forEach(el=>{
 document.getElementById("imageInput").onchange = async function(e){
   const file = e.target.files[0];
   if(!file) return;
-
+  
   const img = new Image();
   img.src = URL.createObjectURL(file);
   await new Promise(r=>img.onload = r);
-
+  
   const maxWidth = 800;
   let w = img.width, h = img.height;
   if(w > maxWidth){
     h = h * maxWidth / w;
     w = maxWidth;
   }
-
+  
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-
+  
   currentImage = canvas.toDataURL("image/jpeg", 0.8);
   document.getElementById("previewImg").src = currentImage;
   document.getElementById("imagePreview").style.display = "block";
@@ -607,7 +681,7 @@ window.addReaction = async function(msgId, emoji){
       .select("reactions")
       .eq("id", msgId)
       .single();
-
+    
     if(selectErr) throw selectErr;
 
     const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
@@ -618,7 +692,7 @@ window.addReaction = async function(msgId, emoji){
       .from("messages")
       .update({ reactions: current })
       .eq("id", msgId);
-
+    
     if(updateErr) throw updateErr;
 
   } catch(e) {
@@ -684,7 +758,7 @@ function renderChat(rows){
     }
     div.className = "msg " + (isMe ? "me" : "other");
     div.dataset.id = r.id;
-
+    
     const isAdmin = r.is_admin || r.sender_id === "admin";
     const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
     div.innerHTML += `<div class="msg-nick">${nick}</div>`;
@@ -701,13 +775,13 @@ function renderChat(rows){
     }
 
     if(r.audio){
-      div.innerHTML += `<audio controls><source src="${r.audio}"></audio>`;
+      div.innerHTML += `<audio controls><source src="${r.audio}">`;
     }
-
+    
     if(r.content){
       div.innerHTML += `<div>${r.content}</div>`;
     }
-
+    
     if(r.reactions && Object.keys(r.reactions).length > 0){
       let reactionHtml = '<div class="msg-reactions">';
       Object.entries(r.reactions).forEach(([emoji, count])=>{
@@ -725,8 +799,8 @@ function renderChat(rows){
     div.innerHTML += barHtml;
 
     const replyText = r.content ? r.content.replace(/'/g,"\\'") : "語音訊息";
-    div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
-
+    div.innerHTML += `<button class="reply-btn" onclick="setReply('${r.id}', '${replyText}')">回覆</button>`;
+    
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
   })
@@ -745,7 +819,7 @@ async function loadMsg(){
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
   if(!text && !currentImage && !currentAudio) return;
-
+  
   const payload = {
     room_id:roomId,
     content:text,
@@ -757,10 +831,10 @@ async function sendMsg(){
   if(currentReplyId) payload.reply_to = currentReplyId;
   if(currentImage) payload.image = currentImage;
   if(currentAudio) payload.audio = currentAudio;
-
+  
   const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：", error);
-
+  
   document.getElementById("msgInput").value = "";
   cancelReply();
   clearImage();
@@ -823,7 +897,7 @@ async function loadAnnouncements(){
 
   if(error){
     console.error("公告載入失敗：", error);
-    box.innerHTML = '<div style="text-align:center;color:#e06666;padding:2rem">載入公告失敗：' + error.message + '</div>';
+    box.innerHTML = '<div style="text-align:center;color:#e06666;padding:2rem">載入公告失敗，請稍後再試</div>';
     return;
   }
 
@@ -841,7 +915,7 @@ async function loadAnnouncements(){
         <div class="ann-title">📢 公告</div>
         <div class="ann-time">${formatTime(ann.created_at)}</div>
       </div>
-      <div class="ann-content">${(ann.content||"").replace(/\n/g,'<br>')}</div>
+      <div class="ann-content">${ann.content.replace(/\n/g,'<br>')}</div>
       <div class="ann-reply-toggle" onclick="toggleReplies('${ann.id}')">
         ${ann.allow_reply ? '💬 查看/發表回應' : '🔒 已關閉回應'}
       </div>
@@ -862,7 +936,7 @@ async function loadAnnouncements(){
 
 function toggleReplies(annId){
   const el = document.getElementById(`replies-${annId}`);
-  if(el) el.classList.toggle("show");
+  el.classList.toggle("show");
 }
 
 async function loadAnnReplies(annId){
@@ -886,7 +960,7 @@ async function loadAnnReplies(annId){
     item.className = "reply-item";
     item.innerHTML = `
       <div class="reply-nick">${rep.nickname}</div>
-      <div>${(rep.content||"").replace(/\n/g,'<br>')}</div>
+      <div>${rep.content.replace(/\n/g,'<br>')}</div>
       <div class="reply-time">${formatTime(rep.created_at)}</div>
     `;
     listEl.appendChild(item);
@@ -920,6 +994,7 @@ async function submitAnnReply(annId){
   input.value = "";
   loadAnnReplies(annId);
 }
+
 </script>
 </body>
 </html>
