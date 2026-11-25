@@ -6,67 +6,293 @@
 <title>管理後台｜匿名私信</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:'PingFang TC','Microsoft JhengHei',system-ui,sans-serif}
-body{background:linear-gradient(160deg,#fff7f5,#fff1f3);color:#5c4a4a;padding:1rem;max-width:900px;margin:0 auto}
-h2{text-align:center;margin-bottom:1.2rem;color:#e8839b;font-weight:700}
-h2::before{content:"🎀 "}
-h2::after{content:" 🎀"}
-.room{border:1px solid #f6dde2;border-radius:18px;margin-bottom:1rem;background:#fff;overflow:hidden;box-shadow:0 4px 14px rgba(232,131,155,.10)}
-.room-header{padding:.8rem 1rem;background:#fff4f6;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #fbe4e8}
-.room-id{color:#a88b8f;font-size:.85rem}
-.room-toggle{color:#e8839b;font-size:1.2rem}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Microsoft JhengHei','PingFang TC',system-ui,sans-serif}
+body{
+  background:#faf5f2;
+  color:#5a4a4a;
+  padding:1rem;
+  max-width:900px;
+  margin:0 auto;
+  min-height:100vh;
+}
+h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600}
+.room{
+  border:1px solid #ffd9cc;
+  border-radius:14px;
+  margin-bottom:1rem;
+  background:#fff;
+  overflow:hidden;
+  box-shadow:0 3px 10px rgba(212,122,106,0.06);
+}
+.room-header{
+  padding:.8rem 1rem;
+  background:#fff5f2;
+  cursor:pointer;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid #ffe8e0;
+}
+.room-id{color:#a86558;font-size:.85rem;font-weight:500}
+.room-toggle{color:#d47a6a;font-size:1.2rem}
 .room-body{padding:0 1rem 1rem;display:block}
-.msg-list{height:300px;overflow-y:auto;padding-right:.5rem;margin:.8rem 0;border-bottom:1px solid #fbe4e8;display:flex;flex-direction:column}
-.msg{padding:.65rem .8rem;border-radius:16px;margin:.4rem 0;max-width:80%;word-break:break-word;position:relative;line-height:1.5;box-shadow:0 2px 6px rgba(180,120,130,.08)}
-.visitor{background:#fff;border:1px solid #fbe4e8;margin-right:auto;border-bottom-left-radius:6px}
-.admin{background:linear-gradient(135deg,#ffb6c1,#ffc9a9);color:#5c3a42;margin-left:auto;text-align:right;border-bottom-right-radius:6px}
-.admin .msg-nick{color:#7a3b48}
-.admin small{color:#8a5a63}
-.msg img{max-width:100%;border-radius:12px;margin:.3rem 0;display:block}
-.msg audio{max-width:100%;margin:.3rem 0;display:block;height:34px}
-.msg-nick{font-size:.75rem;color:#e8839b;font-weight:600;margin-bottom:.2rem}
+
+.room-subtab{
+  display:flex;gap:0.5rem;margin:0.8rem 0;
+  border-bottom:1px solid #ffe8e0;
+  padding-bottom:0.5rem;
+}
+.room-subtab button{
+  padding:0.4rem 0.8rem;
+  background:none;
+  border:none;
+  color:#a86558;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:0.85rem;
+}
+.room-subtab button.active{
+  background:#ffe8e0;
+  color:#d47a6a;
+  font-weight:500;
+}
+
+.msg-list{
+  height:300px;
+  overflow-y:auto;
+  padding-right:.5rem;
+  margin:.5rem 0;
+  border-bottom:1px solid #ffe8e0;
+  display:flex;
+  flex-direction:column;
+}
+.msg{
+  padding:.7rem .9rem;
+  border-radius:14px;
+  margin:.4rem 0;
+  max-width:80%;
+  word-break:break-word;
+  position:relative;
+  line-height:1.5;
+  font-size:0.9rem;
+}
+.visitor{
+  background:#fff8f5;
+  margin-right:auto;
+  border:1px solid #ffe0d5;
+  border-bottom-left-radius:5px;
+}
+.admin{
+  background:linear-gradient(135deg, #ffc4b3 0%, #ffa899 100%);
+  margin-left:auto;
+  color:#fff;
+  border-bottom-right-radius:5px;
+}
+.msg img{max-width:100%;border-radius:10px;margin:.3rem 0;display:block}
+.msg audio{max-width:100%;margin:.3rem 0;display:block;height:30px;border-radius:6px}
+.msg-nick{font-size:.7rem;color:#d47a6a;font-weight:600;margin-bottom:.3rem}
 .visitor .msg-nick{text-align:left}
-.reply-quote{font-size:.7rem;color:#a88b8f;border-left:2px solid #ffd3db;padding:.3rem .5rem;margin-bottom:.3rem;opacity:.9;text-align:left;border-radius:0 8px 8px 0;background:#fff4f6}
-.reply-btn{font-size:.7rem;background:none;border:none;color:#c9a7ad;cursor:pointer;margin-right:.5rem;box-shadow:none}
-.del-btn{background:#ffd0d8;border:none;color:#c0395a;padding:.25rem .6rem;border-radius:12px;cursor:pointer;font-size:.75rem;flex-shrink:0;margin-left:.8rem}
-.del-btn:hover{background:#ffb9c6}
+.reply-quote{
+  font-size:.7rem;
+  color:#b08a80;
+  border-left:2px solid #ffc4b3;
+  padding-left:.4rem;
+  margin-bottom:.3rem;
+  opacity:.9;
+  text-align:left;
+  background:#fff0eb;
+  padding:0.25rem 0.5rem;
+  border-radius:5px;
+}
+.reply-btn{
+  font-size:.7rem;
+  background:none;
+  border:none;
+  color:#b08a80;
+  cursor:pointer;
+  margin-right:.5rem;
+  margin-top:0.2rem;
+}
+.del-btn{
+  background:#f8d7da;
+  border:none;
+  color:#a1424a;
+  padding:.2rem .5rem;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:.75rem;
+  flex-shrink:0;
+  margin-left:.5rem;
+}
 
 /* 表情反應 */
 .msg-reactions{display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap;justify-content:flex-end}
 .visitor .msg-reactions{justify-content:flex-start}
-.reaction-item{background:#fff;border:1px solid #fbe4e8;border-radius:12px;padding:.1rem .45rem;font-size:.8rem;cursor:pointer}
-.reaction-item:hover{background:#fff0f2}
+.reaction-item{
+  background:#fff;
+  border:1px solid #ffd4c8;
+  border-radius:10px;
+  padding:.1rem .4rem;
+  font-size:.8rem;
+  cursor:pointer;
+}
 .msg-reaction-bar{
-  position:absolute;bottom:-12px;left:6px;
+  position:absolute;bottom:-14px;left:6px;
   display:none;gap:.2rem;background:#fff;
-  border:1px solid #fbe4e8;border-radius:20px;padding:.2rem .4rem;z-index:10;
-  box-shadow:0 3px 8px rgba(180,120,130,.15)}
+  border:1px solid #ffd4c8;
+  border-radius:20px;
+  padding:.15rem .4rem;
+  z-index:10;
+  box-shadow:0 2px 6px rgba(212,122,106,0.08);
+}
 .msg:hover .msg-reaction-bar{display:flex}
 .admin .msg-reaction-bar{left:auto;right:6px}
 .msg-reaction-bar span{cursor:pointer;font-size:.85rem;padding:0 .15rem}
 
-.load-more{width:100%;padding:.5rem;background:#fff4f6;border:1px dashed #ffd3db;color:#e8839b;border-radius:12px;cursor:pointer;margin-bottom:.6rem;font-size:.8rem}
-.load-more:hover{background:#fff0f2}
-.reply-status{font-size:.75rem;color:#e8839b;margin-bottom:.4rem;display:none;background:#fff4f6;border:1px dashed #ffd3db;border-radius:12px;padding:.4rem .6rem}
-.reply-status span{cursor:pointer;color:#c9a7ad;margin-left:.5rem}
+.load-more{
+  width:100%;
+  padding:.4rem;
+  background:#fff5f2;
+  border:1px solid #ffd9cc;
+  color:#a86558;
+  border-radius:6px;
+  cursor:pointer;
+  margin-bottom:.6rem;
+  font-size:.8rem;
+  transition:background 0.2s;
+}
+.load-more:hover{background:#ffe8e0}
+
+.reply-status{
+  font-size:.75rem;
+  color:#d47a6a;
+  margin-bottom:.4rem;
+  display:none;
+  background:#fff0eb;
+  padding:0.4rem 0.6rem;
+  border-radius:8px;
+  border:1px dashed #ffc4b3;
+}
+.reply-status span{cursor:pointer;color:#b08a80;margin-left:.5rem}
 .reply-area{display:flex;gap:.5rem;align-items:flex-end}
-.image-preview,.audio-preview{display:none;margin-bottom:.4rem;position:relative}
-.image-preview img{max-width:100px;border-radius:12px;border:1px solid #fbe4e8}
-.image-preview span{position:absolute;top:-6px;right:-6px;background:#ffb6c1;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.7rem}
-.audio-preview{align-items:center;gap:.6rem;flex-wrap:wrap;width:fit-content;background:#fff4f6;border:1px dashed #ffd3db;border-radius:14px;padding:.5rem .7rem}
-.audio-preview audio{max-width:200px;flex-shrink:0;height:32px}
-.audio-preview .discard{background:#ff8fa3;border:none;color:#fff;border-radius:20px;padding:.35rem .8rem;font-size:.75rem;cursor:pointer;flex-shrink:0;position:relative;z-index:2;pointer-events:auto;min-height:30px}
-.audio-preview .discard:hover{background:#ff758f}
-.audio-preview .dur{font-size:.75rem;color:#a88b8f}
-.rec-timer{font-size:.85rem;color:#ff758f;font-weight:700;min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
-.emoji-btn{padding:0 .6rem;background:#fff;border:1px solid #fbe4e8;color:#e8839b;border-radius:50%;cursor:pointer;font-size:1rem;width:38px;height:38px;display:flex;align-items:center;justify-content:center}
-.rec-btn.recording{background:#ff8fa3;border-color:#ff8fa3;color:#fff}
-.emoji-panel{display:none;gap:.4rem;padding:.5rem;background:#fff;border:1px solid #fbe4e8;border-radius:14px;margin-bottom:.4rem;flex-wrap:wrap}
-.emoji-panel span{font-size:1.1rem;cursor:pointer;padding:.2rem .3rem;border-radius:8px}
-.emoji-panel span:hover{background:#fff0f2}
-textarea{flex:1;padding:.65rem;background:#fff;border:1px solid #fbe4e8;border-radius:14px;color:#5c4a4a;resize:none;font-family:inherit}
-textarea:focus{outline:none;border-color:#ffb6c1;box-shadow:0 0 0 3px rgba(255,182,193,.2)}
-button{padding:0 .9rem;background:linear-gradient(135deg,#ffb6c1,#ffc9a9);color:#fff;border:none;border-radius:14px;cursor:pointer;font-weight:600}
+
+.image-preview,.audio-preview{display:none;margin-bottom:.4rem;position:relative;width:fit-content}
+.image-preview img{max-width:100px;border-radius:8px;border:1px solid #ffd4c8}
+.audio-preview audio{max-width:220px;border-radius:8px;height:30px}
+.image-preview .close-btn,.audio-preview .close-btn{
+  position:absolute;top:-7px;right:-7px;
+  background:#d47a6a;color:#fff;
+  border-radius:50%;
+  width:18px;height:18px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:.7rem;z-index:2;
+}
+.recording-info{
+  display:none;align-items:center;gap:0.4rem;
+  margin-bottom:0.4rem;color:#e06666;
+  font-size:0.8rem;background:#ffeaea;
+  padding:0.3rem 0.6rem;border-radius:8px;
+  width:fit-content;
+}
+.recording-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#ff5252;animation:blink 1s infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.emoji-btn{
+  padding:0 .6rem;
+  height:36px;
+  background:#fff;
+  border:1px solid #ffd4c8;
+  color:#d47a6a;
+  border-radius:50%;
+  cursor:pointer;
+  font-size:1rem;
+  display:flex;align-items:center;justify-content:center;
+}
+.rec-btn.recording{background:#e06666;border-color:#e06666;color:#fff}
+.emoji-panel{
+  display:none;gap:.4rem;padding:.5rem;
+  background:#fff5f2;
+  border:1px solid #ffd4c8;
+  border-radius:8px;
+  margin-bottom:.4rem;
+  flex-wrap:wrap;
+}
+.emoji-panel span{font-size:1.1rem;cursor:pointer;padding:.2rem .3rem;border-radius:4px}
+.emoji-panel span:hover{background:#ffe8e0}
+textarea{
+  flex:1;
+  padding:.6rem .8rem;
+  background:#fff;
+  border:1px solid #ffd4c8;
+  border-radius:10px;
+  color:#5a4a4a;
+  resize:none;
+  font-family:inherit;
+  font-size:0.9rem;
+}
+textarea:focus{outline:none;border-color:#ff9a8b}
+button{
+  padding:0 .8rem;
+  height:36px;
+  background:linear-gradient(135deg, #ffb4a2 0%, #ff9a8b 100%);
+  color:white;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:0.9rem;
+  box-shadow:0 2px 6px rgba(255,154,139,0.25);
+}
+
+/* 公告管理樣式 */
+.ann-manage-area{display:none}
+.ann-manage-area.show{display:block}
+.ann-input-area{
+  display:flex;gap:0.5rem;align-items:flex-end;
+  margin-bottom:0.8rem;
+  padding-bottom:0.8rem;
+  border-bottom:1px dashed #ffd9cc;
+}
+.ann-input-area textarea{min-height:60px}
+.ann-item{
+  background:#fff8f5;
+  border:1px solid #ffe0d5;
+  border-radius:10px;
+  padding:0.8rem;
+  margin-bottom:0.6rem;
+}
+.ann-item-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:0.4rem;
+}
+.ann-item-time{font-size:0.7rem;color:#c9a79e}
+.ann-item-content{font-size:0.9rem;line-height:1.5;margin-bottom:0.5rem;white-space:pre-wrap}
+.ann-item-actions{display:flex;gap:0.4rem;align-items:center}
+.ann-item-actions button{
+  height:28px;
+  padding:0 0.6rem;
+  font-size:0.75rem;
+  border-radius:6px;
+}
+.btn-outline{
+  background:#fff;
+  color:#d47a6a;
+  border:1px solid #ffd4c8;
+  box-shadow:none;
+}
+.btn-danger{
+  background:#f8d7da;
+  color:#a1424a;
+  box-shadow:none;
+}
+.ann-reply-count{font-size:0.75rem;color:#a86558}
+
+/* 滾動條 */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#fff5f2;border-radius:3px}
+::-webkit-scrollbar-thumb{background:#ffd4c8;border-radius:3px}
 </style>
 </head>
 <body>
@@ -82,25 +308,28 @@ const ADMIN_SENDER_ID = "admin";
 const ADMIN_NICKNAME = "口哈內";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
-// ========== 時間格式化：指定台北時區，月-日 時:分 ==========
+const roomOldestTime = {};
+const PAGE_SIZE = 30;
+const roomReply = {};
+const roomImage = {};
+const roomAudio = {};
+const roomRecorder = {};
+const roomStream = {};
+const roomAudioChunks = {};
+const roomTimer = {};
+const roomSeconds = {};
+const roomSubTab = {};
+
 function formatTime(isoString){
-  if(!isoString) return "";
   const date = new Date(isoString);
-  if(isNaN(date.getTime())) return String(isoString);
-  const fmt = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit",
-    hour12: false
-  });
-  const parts = fmt.formatToParts(date);
-  const get = t => (parts.find(p => p.type === t) || {}).value || "";
-  let hh = get("hour");
-  if(hh === "24") hh = "00";
-  return `${get("month")}-${get("day")} ${hh}:${get("minute")}`;
+  if (isNaN(date.getTime())) return isoString;
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${m}-${d} ${hh}:${mm}`;
 }
 
-// 依 sender_id 生成固定編號
 function getVisitorNick(senderId){
   if(!senderId || senderId.trim() === "") return "匿名訪客";
   let hash = 0;
@@ -112,7 +341,7 @@ function getVisitorNick(senderId){
   return `訪客 #${num}`;
 }
 
-// 通知 + 提示音
+// 通知
 const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
 async function requestNotify() {
   if (!("Notification" in window)) return false;
@@ -127,47 +356,7 @@ function showNotify(title, body) {
 }
 requestNotify();
 
-const roomOldestTime = {};
-const PAGE_SIZE = 30;
-const roomReply = {};
-const roomImage = {};
-const roomAudio = {};
-
-// 語音錄音狀態（單一後台同時只錄一則）
-let recorder = null;
-let audioChunks = [];
-let micStream = null;
-let recordingRoom = null;
-let recTimerId = null;
-let recSeconds = 0;
-let audioDiscarded = false; // 點捨棄後，onstop 不再把音檔塞回預覽
-const MAX_REC_SECONDS = 60; // 最長錄音 60 秒，到點自動停止
-
-function fmtSec(s){
-  const m = String(Math.floor(s/60)).padStart(2,'0');
-  const ss = String(s%60).padStart(2,'0');
-  return `${m}:${ss}`;
-}
-function startRecTimer(roomId){
-  recSeconds = 0;
-  const el = document.getElementById(`recTimer-${roomId}`);
-  if(el){ el.textContent = fmtSec(0); el.style.display = "inline-block"; }
-  recTimerId = setInterval(()=>{
-    recSeconds++;
-    const t = document.getElementById(`recTimer-${recordingRoom}`);
-    if(t) t.textContent = fmtSec(recSeconds);
-    if(recSeconds >= MAX_REC_SECONDS) toggleRecord(recordingRoom);
-  }, 1000);
-}
-function stopRecTimer(){
-  if(recTimerId){ clearInterval(recTimerId); recTimerId = null; }
-  if(recordingRoom){
-    const t = document.getElementById(`recTimer-${recordingRoom}`);
-    if(t) t.style.display = "none";
-  }
-}
-
-// 讀取本機表情紀錄
+// 表情紀錄
 function getReactionRecord(){
   try {
     return JSON.parse(localStorage.getItem("reaction_record") || "{}");
@@ -184,7 +373,7 @@ async function loadAllRooms(){
     .from("messages")
     .select("room_id, created_at")
     .order("created_at",{ascending:false});
-
+  
   if(error) {
     console.log("載入錯誤：", error);
     return;
@@ -203,51 +392,70 @@ async function loadAllRooms(){
         <div class="room-toggle" id="toggle-${roomId}">−</div>
       </div>
       <div class="room-body" id="body-${roomId}">
-        <button class="load-more" onclick="loadMoreMsg('${roomId}')">載入更早訊息</button>
-        <div class="msg-list" id="r-${roomId}"></div>
-        <div class="reply-status" id="replyStatus-${roomId}">
-          回覆：<span id="replyText-${roomId}"></span>
-          <span onclick="cancelRoomReply('${roomId}')">✕</span>
+        <div class="room-subtab">
+          <button class="active" onclick="switchRoomSubTab('${roomId}', 'chat')">💬 聊天記錄</button>
+          <button onclick="switchRoomSubTab('${roomId}', 'announcement')">📢 公告管理</button>
         </div>
-        <div class="image-preview" id="imgPreview-${roomId}">
-          <img id="imgPrev-${roomId}">
-          <span onclick="clearRoomImage('${roomId}')">✕</span>
+
+        <div class="chat-area" id="chatArea-${roomId}">
+          <button class="load-more" onclick="loadMoreMsg('${roomId}')">載入更早訊息</button>
+          <div class="msg-list" id="r-${roomId}"></div>
+          <div class="reply-status" id="replyStatus-${roomId}">
+            回覆：<span id="replyText-${roomId}"></span>
+            <span onclick="cancelRoomReply('${roomId}')">✕</span>
+          </div>
+          <div class="image-preview" id="imgPreview-${roomId}">
+            <img id="imgPrev-${roomId}">
+            <span class="close-btn" onclick="clearRoomImage('${roomId}')">✕</span>
+          </div>
+          <div class="recording-info" id="recInfo-${roomId}">
+            <span class="recording-dot"></span>
+            <span>錄音中 <span id="roomTimer-${roomId}">00:00</span></span>
+          </div>
+          <div class="audio-preview" id="audioPreview-${roomId}">
+            <audio id="audioPrev-${roomId}" controls>
+            <span class="close-btn" onclick="clearRoomAudio('${roomId}')">✕</span>
+          </div>
+          <div class="emoji-panel" id="emojiPanel-${roomId}">
+            <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
+            <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
+          </div>
+          <div class="reply-area">
+            <button class="emoji-btn" onclick="toggleRoomEmoji('${roomId}')">😊</button>
+            <button onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
+            <button class="rec-btn" id="recBtn-${roomId}" onclick="toggleRoomRecord('${roomId}')">🎤</button>
+            <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
+            <textarea id="rep-${roomId}" placeholder="回覆訊息..." rows="2"></textarea>
+            <button onclick="sendAdminMsg('${roomId}')">送出</button>
+          </div>
         </div>
-        <div class="audio-preview" id="audioPreview-${roomId}">
-          <audio id="audioEl-${roomId}" controls preload="metadata"></audio>
-          <span class="dur" id="audioDur-${roomId}"></span>
-          <button class="discard" onclick="clearRoomAudio('${roomId}')">捨棄</button>
-        </div>
-        <div class="emoji-panel" id="emojiPanel-${roomId}">
-          <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
-          <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
-        </div>
-        <div class="reply-area">
-          <button class="emoji-btn" onclick="toggleRoomEmoji('${roomId}')">😊</button>
-          <button class="emoji-btn" onclick="document.getElementById('imgInput-${roomId}').click()">📎</button>
-          <button class="emoji-btn rec-btn" id="recBtn-${roomId}" onclick="toggleRecord('${roomId}')">🎤</button>
-          <span class="rec-timer" id="recTimer-${roomId}" style="display:none">00:00</span>
-          <input type="file" id="imgInput-${roomId}" accept="image/*" style="display:none">
-          <textarea id="rep-${roomId}" placeholder="回覆訊息..."></textarea>
-          <button onclick="sendAdminMsg('${roomId}')">送出回覆</button>
+
+        <div class="ann-manage-area" id="annArea-${roomId}">
+          <div class="ann-input-area">
+            <textarea id="annInput-${roomId}" placeholder="輸入公告內容..." rows="2"></textarea>
+            <button onclick="publishAnnouncement('${roomId}')">發布公告</button>
+          </div>
+          <div id="annList-${roomId}"></div>
         </div>
       </div>`;
     box.appendChild(roomDiv);
 
     setTimeout(()=>{
+      // 表情面板
       document.querySelectorAll(`#emojiPanel-${roomId} span`).forEach(el=>{
         el.onclick = ()=>{
           document.getElementById(`rep-${roomId}`).value += el.innerText;
           document.getElementById(`rep-${roomId}`).focus();
         };
       });
+      // 圖片上傳
       document.getElementById(`imgInput-${roomId}`).onchange = async function(e){
         const file = e.target.files[0];
         if(!file) return;
         const img = new Image();
         img.src = URL.createObjectURL(file);
         await new Promise(r=>img.onload = r);
-
+        
         const maxWidth = 800;
         let w = img.width, h = img.height;
         if(w > maxWidth){
@@ -258,7 +466,7 @@ async function loadAllRooms(){
         canvas.width = w;
         canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-
+        
         roomImage[roomId] = canvas.toDataURL("image/jpeg", 0.8);
         document.getElementById(`imgPrev-${roomId}`).src = roomImage[roomId];
         document.getElementById(`imgPreview-${roomId}`).style.display = "block";
@@ -266,8 +474,24 @@ async function loadAllRooms(){
       };
     },0);
 
+    roomSubTab[roomId] = "chat";
     await loadRoomMsg(roomId, true);
+    loadRoomAnnouncements(roomId);
   }
+}
+
+// 切換房間子分頁
+function switchRoomSubTab(roomId, tab){
+  roomSubTab[roomId] = tab;
+  const chatArea = document.getElementById(`chatArea-${roomId}`);
+  const annArea = document.getElementById(`annArea-${roomId}`);
+  const buttons = document.querySelectorAll(`#body-${roomId} .room-subtab button`);
+  
+  chatArea.style.display = tab === "chat" ? "block" : "none";
+  annArea.style.display = tab === "announcement" ? "block" : "none";
+  
+  buttons[0].classList.toggle("active", tab === "chat");
+  buttons[1].classList.toggle("active", tab === "announcement");
 }
 
 function toggleRoomEmoji(roomId){
@@ -280,81 +504,76 @@ function clearRoomImage(roomId){
   document.getElementById(`imgPreview-${roomId}`).style.display = "none";
 }
 
-function clearRoomAudio(roomId){
-  // 標記為捨棄：即使 onstop 稍後才觸發，也不會把音檔塞回預覽
-  audioDiscarded = true;
-  // 若還在錄音，一併停止
-  if(recorder){ try{ recorder.stop(); }catch(e){} }
-  stopRecTimer();
-  roomAudio[roomId] = null;
-  const player = document.getElementById(`audioEl-${roomId}`);
-  if(player){ try{ player.pause(); }catch(e){} player.removeAttribute("src"); player.load(); }
-  document.getElementById(`audioPreview-${roomId}`).style.display = "none";
-  const dur = document.getElementById(`audioDur-${roomId}`);
-  if(dur) dur.textContent = "";
-  const btn = document.getElementById(`recBtn-${roomId}`);
-  if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
+// 房間錄音功能
+function startRoomTimer(roomId){
+  roomSeconds[roomId] = 0;
+  updateRoomTimerDisplay(roomId);
+  roomTimer[roomId] = setInterval(()=>{
+    roomSeconds[roomId]++;
+    updateRoomTimerDisplay(roomId);
+  }, 1000);
 }
 
-// ========== 語音錄音 ==========
-async function toggleRecord(roomId){
-  if(recorder){
-    recorder.stop();
-    return;
+function stopRoomTimer(roomId){
+  if(roomTimer[roomId]){
+    clearInterval(roomTimer[roomId]);
+    roomTimer[roomId] = null;
   }
-  try{
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
-    recorder = mime ? new MediaRecorder(micStream, { type: mime }) : new MediaRecorder(micStream);
-    audioChunks = [];
-    recordingRoom = roomId;
+  document.getElementById(`recInfo-${roomId}`).style.display = "none";
+}
 
-    recorder.ondataavailable = e => { if(e.data && e.data.size) audioChunks.push(e.data); };
+function updateRoomTimerDisplay(roomId){
+  const m = String(Math.floor(roomSeconds[roomId] / 60)).padStart(2, '0');
+  const s = String(roomSeconds[roomId] % 60).padStart(2, '0');
+  document.getElementById(`roomTimer-${roomId}`).innerText = `${m}:${s}`;
+}
 
-    recorder.onstop = () => {
-      stopRecTimer();
-      const mime = recorder ? recorder.mimeType : "";
-      const stoppedRoom = recordingRoom;
-      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
-      recorder = null;
-      const btn = document.getElementById(`recBtn-${stoppedRoom}`);
-      if(btn){ btn.innerText = "🎤"; btn.classList.remove("recording"); }
-      recordingRoom = null;
-
-      // 若已按捨棄，不保留、不顯示這段音檔
-      if(audioDiscarded) return;
-
-      const blob = new Blob(audioChunks, { type: mime || "audio/webm" });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        roomAudio[stoppedRoom] = reader.result;
-        const player = document.getElementById(`audioEl-${stoppedRoom}`);
-        player.src = roomAudio[stoppedRoom];
-        player.onloadedmetadata = () => {
-          const dur = Math.round(player.duration || recSeconds);
-          const durEl = document.getElementById(`audioDur-${stoppedRoom}`);
-          if(durEl) durEl.textContent = fmtSec(dur);
-        };
-        document.getElementById(`audioPreview-${stoppedRoom}`).style.display = "flex";
-      };
-      reader.readAsDataURL(blob);
-    };
-
-    audioDiscarded = false;
-    recorder.start();
-    startRecTimer(roomId);
-    const btn = document.getElementById(`recBtn-${roomId}`);
-    btn.innerText = "⏹";
-    btn.classList.add("recording");
-  }catch(err){
-    alert("無法取得麥克風權限，請允許麥克風權限後再試");
-    console.error(err);
-    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
-    recorder = null;
-    stopRecTimer();
+async function toggleRoomRecord(roomId){
+  if(!roomRecorder[roomId]){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      roomStream[roomId] = stream;
+      const recorder = new MediaRecorder(stream);
+      roomAudioChunks[roomId] = [];
+      recorder.ondataavailable = e=>{
+        roomAudioChunks[roomId].push(e.data);
+      }
+      recorder.onstop = ()=>{
+        const blob = new Blob(roomAudioChunks[roomId], {type:"audio/webm"});
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = ()=>{
+          roomAudio[roomId] = reader.result;
+          document.getElementById(`audioPrev-${roomId}`).src = roomAudio[roomId];
+          document.getElementById(`audioPreview-${roomId}`).style.display = "block";
+        }
+        roomStream[roomId].getTracks().forEach(t=>t.stop());
+        roomStream[roomId] = null;
+        roomRecorder[roomId] = null;
+        document.getElementById(`recBtn-${roomId}`).classList.remove("recording");
+        document.getElementById(`recBtn-${roomId}`).innerText = "🎤";
+        stopRoomTimer(roomId);
+      }
+      recorder.start();
+      roomRecorder[roomId] = recorder;
+      startRoomTimer(roomId);
+      document.getElementById(`recInfo-${roomId}`).style.display = "flex";
+      document.getElementById(`recBtn-${roomId}`).classList.add("recording");
+      document.getElementById(`recBtn-${roomId}`).innerText = "⏹";
+    }catch(err){
+      alert("無法取得麥克風權限，請使用 HTTPS 網址並允許權限");
+      console.error(err);
+    }
+  }else{
+    roomRecorder[roomId].stop();
   }
+}
+
+function clearRoomAudio(roomId){
+  roomAudio[roomId] = null;
+  roomSeconds[roomId] = 0;
+  document.getElementById(`audioPreview-${roomId}`).style.display = "none";
+  document.getElementById(`audioPrev-${roomId}`).src = "";
 }
 
 function setRoomReply(roomId, msgId, content){
@@ -370,7 +589,7 @@ function cancelRoomReply(roomId){
   document.getElementById(`replyStatus-${roomId}`).style.display = "none";
 }
 
-// 表情反應：樂觀更新，不跳動
+// 表情反應
 window.addReaction = async function(roomId, msgId, emoji){
   try {
     const record = getReactionRecord();
@@ -490,7 +709,7 @@ function createMsgElement(roomId, m, allRows){
   }
   div.className = "msg "+(isMe ? "admin" : "visitor");
   div.dataset.id = m.id;
-
+  
   let inner = "";
   const nick = isMe ? ADMIN_NICKNAME : getVisitorNick(m.sender_id);
   inner += `<div class="msg-nick">${nick}</div>`;
@@ -507,11 +726,11 @@ function createMsgElement(roomId, m, allRows){
   }
 
   if(m.audio){
-    inner += `<audio controls preload="metadata"><source src="${m.audio}" type="audio/webm"></audio>`;
+    inner += `<audio controls><source src="${m.audio}">`;
   }
-
-  inner += `<span>${m.content || ""}<br><small>${formatTime(m.created_at)}</small>`;
-
+  
+  inner += `<span>${m.content || ""}<br><small style="font-size:0.65rem;opacity:0.8">${formatTime(m.created_at)}</small>`;
+  
   if(m.reactions && Object.keys(m.reactions).length > 0){
     inner += '<div class="msg-reactions">';
     Object.entries(m.reactions).forEach(([emoji, count])=>{
@@ -527,12 +746,12 @@ function createMsgElement(roomId, m, allRows){
   });
   inner += '</div></span>';
 
-  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "圖片/語音";
+  const replyText = m.content ? m.content.replace(/'/g,"\\'") : "語音訊息";
   inner += `
     <button class="reply-btn" onclick="setRoomReply('${roomId}', ${m.id}, '${replyText}')">回覆</button>
     <button class="del-btn" onclick="delMsg('${roomId}', ${m.id})">刪除</button>
   `;
-
+  
   div.innerHTML = inner;
   return div;
 }
@@ -565,23 +784,22 @@ async function delMsg(roomId, id){
 async function sendAdminMsg(roomId){
   const txt = document.getElementById(`rep-${roomId}`).value.trim();
   if(!txt && !roomImage[roomId] && !roomAudio[roomId]) return;
-
+  
   const payload = {
-    room_id: roomId,
-    content: txt,
-    is_admin: true,
+    room_id:roomId,
+    content:txt,
+    is_admin:true,
     sender_id: ADMIN_SENDER_ID,
     nickname: ADMIN_NICKNAME,
-    // 前端直接產生時間（正確 UTC 時間戳），不依賴資料庫 now()
     created_at: new Date().toISOString()
   };
   if(roomReply[roomId]) payload.reply_to = roomReply[roomId];
   if(roomImage[roomId]) payload.image = roomImage[roomId];
   if(roomAudio[roomId]) payload.audio = roomAudio[roomId];
-
+  
   const {error} = await sb.from("messages").insert([payload]);
   if(error) console.log("送出錯誤：",error);
-
+  
   document.getElementById(`rep-${roomId}`).value = "";
   cancelRoomReply(roomId);
   clearRoomImage(roomId);
@@ -589,6 +807,95 @@ async function sendAdminMsg(roomId){
   setTimeout(()=>loadRoomMsg(roomId, true), 300);
 }
 
+// ========== 後台公告管理 ==========
+async function loadRoomAnnouncements(roomId){
+  const listEl = document.getElementById(`annList-${roomId}`);
+  if(!listEl) return;
+
+  const {data: anns, error} = await sb
+    .from("announcements")
+    .select("*")
+    .eq("room_id", roomId)
+    .order("created_at",{ascending:false});
+
+  if(error || anns.length === 0){
+    listEl.innerHTML = '<div style="text-align:center;color:#c9a79e;padding:1rem;font-size:0.85rem">暫無公告</div>';
+    return;
+  }
+
+  listEl.innerHTML = "";
+  anns.forEach(ann=>{
+    const item = document.createElement("div");
+    item.className = "ann-item";
+    item.innerHTML = `
+      <div class="ann-item-header">
+        <div class="ann-item-time">${formatTime(ann.created_at)}</div>
+        <div class="ann-item-actions">
+          <button class="btn-outline" onclick="toggleAnnReply('${roomId}', ${ann.id}, ${!ann.allow_reply})">
+            ${ann.allow_reply ? '關閉留言' : '開啟留言'}
+          </button>
+          <button class="btn-danger" onclick="deleteAnnouncement('${roomId}', ${ann.id})">刪除</button>
+        </div>
+      </div>
+      <div class="ann-item-content">${ann.content.replace(/\n/g,'<br>')}</div>
+      <div class="ann-reply-count">💬 ${ann.allow_reply ? '開放留言' : '已關閉留言'}</div>
+    `;
+    listEl.appendChild(item);
+  });
+}
+
+async function publishAnnouncement(roomId){
+  const input = document.getElementById(`annInput-${roomId}`);
+  const content = input.value.trim();
+  if(!content) return;
+
+  const payload = {
+    room_id: roomId,
+    content: content,
+    allow_reply: true,
+    created_at: new Date().toISOString()
+  };
+
+  const {error} = await sb.from("announcements").insert([payload]);
+  if(error){
+    alert("發布失敗，請稍後再試");
+    console.error(error);
+    return;
+  }
+
+  input.value = "";
+  loadRoomAnnouncements(roomId);
+}
+
+async function toggleAnnReply(roomId, annId, allow){
+  const {error} = await sb
+    .from("announcements")
+    .update({ allow_reply: allow })
+    .eq("id", annId);
+  
+  if(error){
+    console.error("更新失敗", error);
+    return;
+  }
+  loadRoomAnnouncements(roomId);
+}
+
+async function deleteAnnouncement(roomId, annId){
+  if(!confirm("確定要刪除此公告嗎？底下所有留言也會一併刪除。")) return;
+  
+  const {error} = await sb
+    .from("announcements")
+    .delete()
+    .eq("id", annId);
+  
+  if(error){
+    console.error("刪除失敗", error);
+    return;
+  }
+  loadRoomAnnouncements(roomId);
+}
+
+// 實時訂閱
 sb.channel("all")
   .on("postgres_changes",{event:"*",schema:"public",table:"messages"},(payload)=>{
     const newMsg = payload.new;
