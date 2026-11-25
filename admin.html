@@ -867,18 +867,22 @@ async function publishAnnouncement(roomId){
   loadRoomAnnouncements(roomId);
 }
 
-async function toggleAnnReply(roomId, annId, allow){
-  const {error} = await sb
+async function toggleAnnReply(roomId, annId, allow) {
+  const { error } = await sb
     .from("announcements")
     .update({ allow_reply: allow })
     .eq("id", annId);
-  
-  if(error){
-    console.error("更新失敗", error);
+
+  if (error) {
+    alert("切換失敗：" + error.message);
+    console.error("公告更新錯誤：", error);
     return;
   }
+
+  // 更新成功後重新載入公告列表
   loadRoomAnnouncements(roomId);
 }
+
 
 async function deleteAnnouncement(roomId, annId){
   if(!confirm("確定要刪除此公告嗎？底下所有留言也會一併刪除。")) return;
