@@ -901,10 +901,14 @@ async function submitAnnReply(annId){
     created_at: new Date().toISOString()
   };
 
-  const {error} = await sb.from("announcement_replies").insert([payload]);
+  const { data, error } = await sb
+    .from("announcement_replies")
+    .insert([payload])
+    .select();
+
   if(error){
-    alert("送出失敗，請稍後再試");
-    console.error(error);
+    alert("留言失敗：" + error.message);
+    console.error("留言錯誤：", error);
     return;
   }
 
