@@ -831,8 +831,8 @@ async function loadRoomAnnouncements(roomId){
       <div class="ann-item-header">
         <div class="ann-item-time">${formatTime(ann.created_at)}</div>
         <div class="ann-item-actions">
-          <button class="btn-outline" onclick="toggleAnnReply('${roomId}', ${ann.id}, ${!ann.allow_reply})">
-            ${ann.allow_reply ? '關閉留言' : '開啟留言'}
+          <button class="btn-outline" onclick="toggleAnnReply('${roomId}', ${ann.id}, ${ann.allow_reply ? 'false' : 'true'})">
+          ${ann.allow_reply ? '關閉留言' : '開啟留言'}
           </button>
           <button class="btn-danger" onclick="deleteAnnouncement('${roomId}', ${ann.id})">刪除</button>
         </div>
@@ -868,6 +868,8 @@ async function publishAnnouncement(roomId){
 }
 
 async function toggleAnnReply(roomId, annId, allow) {
+  console.log("切換留言狀態：", annId, allow);
+  
   const { error } = await sb
     .from("announcements")
     .update({ allow_reply: allow })
@@ -875,13 +877,13 @@ async function toggleAnnReply(roomId, annId, allow) {
 
   if (error) {
     alert("切換失敗：" + error.message);
-    console.error("公告更新錯誤：", error);
+    console.error("更新公告錯誤：", error);
     return;
   }
 
-  // 更新成功後重新載入公告列表
   loadRoomAnnouncements(roomId);
 }
+
 
 
 async function deleteAnnouncement(roomId, annId){
