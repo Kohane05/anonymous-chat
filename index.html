@@ -100,6 +100,7 @@ h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-s
 .me .audio-play-btn{background:#fff;color:#d47a6a}
 .audio-duration{font-size:0.8rem;color:#a86558;min-width:45px}
 .me .audio-duration{color:#fff5f2}
+.audio-error{font-size:0.8rem;color:#e06666;padding:0.2rem 0}
 
 .msg-nick{font-size:0.75rem;color:#d47a6a;font-weight:600;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.3rem}
 .msg-nick::before{content:"";width:6px;height:6px;border-radius:50%;background:#ffb4a2;display:inline-block}
@@ -415,7 +416,7 @@ let channel = null;
 
 let currentReplyId = null;
 let currentImage = null;
-let currentAudio = null;
+let currentAudioDataUrl = null;
 let previewAudioObj = null;
 
 let recorder = null;
@@ -424,6 +425,21 @@ let stream = null;
 let timerInterval = null;
 let recordingSeconds = 0;
 let audioDiscarded = false;
+let recordMimeType = "";
+
+// 自動偵測最相容的錄音格式
+function getSupportedMimeType(){
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac",
+  ];
+  for(const t of types){
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
 
 function getVisitorId(){
   let vid = localStorage.getItem("visitor_id");
@@ -648,25 +664,39 @@ async function toggleRecord(){
     try{
       audioDiscarded = false;
       stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      recorder = new MediaRecorder(stream);
+      
+      recordMimeType = getSupportedMimeType();
+      recorder = recordMimeType 
+        ? new MediaRecorder(stream, { mimeType: recordMimeType })
+        : new MediaRecorder(stream);
+
       audioChunks = [];
       recorder.ondataavailable = e=>{
         audioChunks.push(e.data);
       }
       recorder.onstop = ()=>{
         if(audioDiscarded) return;
-        const blob = new Blob(audioChunks, {type:"audio/webm"});
-        currentAudio = blob;
+        const blob = new Blob(audioChunks, { type: recordMimeType || "audio/webm" });
         
-        // 預覽播放器
-        previewAudioObj = new Audio(URL.createObjectURL(blob));
-        previewAudioObj.onloadedmetadata = ()=>{
-          const dur = Math.ceil(previewAudioObj.duration);
-          const m = String(Math.floor(dur/60)).padStart(2,'0');
-          const s = String(dur%60).padStart(2,'0');
-          document.getElementById("previewDuration").textContent = `${m}:${s}`;
+        // 轉成永久有效的 dataURL 存入資料庫
+        const reader = new FileReader();
+        reader.onloadend = ()=>{
+          currentAudioDataUrl = reader.result;
+          
+          // 預覽播放器
+          previewAudioObj = new Audio(currentAudioDataUrl);
+          previewAudioObj.onloadedmetadata = ()=>{
+            const dur = Math.ceil(previewAudioObj.duration);
+            const m = String(Math.floor(dur/60)).padStart(2,'0');
+            const s = String(dur%60).padStart(2,'0');
+            document.getElementById("previewDuration").textContent = `${m}:${s}`;
+          };
+          previewAudioObj.onerror = ()=>{
+            document.getElementById("previewDuration").textContent = "格式不相容";
+          };
+          document.getElementById("audioPreview").style.display = "block";
         };
-        document.getElementById("audioPreview").style.display = "block";
+        reader.readAsDataURL(blob);
         
         stream.getTracks().forEach(t=>t.stop());
         stream = null;
@@ -711,7 +741,7 @@ function togglePreviewAudio(){
 
 function clearAudio(){
   audioDiscarded = true;
-  currentAudio = null;
+  currentAudioDataUrl = null;
   recordingSeconds = 0;
   if(previewAudioObj){
     previewAudioObj.pause();
@@ -818,7 +848,7 @@ function updateReactionDom(msgId, emoji, delta){
   }
 }
 
-// 渲染聊天（自訂音訊播放）
+// 渲染聊天（自訂音訊播放 + 格式錯誤提示）
 function renderChat(rows){
   const box = document.getElementById("chatBox");
   box.innerHTML = "";
@@ -847,11 +877,12 @@ function renderChat(rows){
       div.innerHTML += `<img src="${r.image}" alt="圖片">`;
     }
 
-    // 自訂音訊播放器（無下載）
+    // 自訂音訊播放器（含錯誤處理）
     if(r.audio){
+      const playerId = `audio_${r.id}`;
       div.innerHTML += `
-      <div class="audio-player">
-        <button class="audio-play-btn" onclick="playMsgAudio(this, '${r.audio}')">▶</button>
+      <div class="audio-player" id="${playerId}">
+        <button class="audio-play-btn" data-src="${r.audio}">▶</button>
         <span class="audio-duration">--:--</span>
       </div>`;
     }
@@ -881,41 +912,41 @@ function renderChat(rows){
     
     div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
     box.appendChild(div);
+
+    // 繫結播放事件與錯誤處理
+    if(r.audio){
+      const playerWrap = document.getElementById(`audio_${r.id}`);
+      const btn = playerWrap.querySelector(".audio-play-btn");
+      const dur = playerWrap.querySelector(".audio-duration");
+      let audioObj = null;
+
+      btn.onclick = ()=>{
+        if(!audioObj){
+          audioObj = new Audio(btn.dataset.src);
+          audioObj.onloadedmetadata = ()=>{
+            const d = Math.ceil(audioObj.duration);
+            const m = String(Math.floor(d/60)).padStart(2,'0');
+            const s = String(d%60).padStart(2,'0');
+            dur.textContent = `${m}:${s}`;
+          };
+          audioObj.onerror = ()=>{
+            playerWrap.innerHTML = '<div class="audio-error">⚠ 此錄音格式與您的裝置不相容</div>';
+          };
+          audioObj.onended = ()=>{
+            btn.textContent = "▶";
+          };
+        }
+        if(audioObj.paused){
+          audioObj.play();
+          btn.textContent = "⏸";
+        }else{
+          audioObj.pause();
+          btn.textContent = "▶";
+        }
+      };
+    }
   })
   box.scrollTop = box.scrollHeight;
-}
-
-// 播放訊息語音
-let currentPlayingBtn = null;
-function playMsgAudio(btn, src){
-  if(currentPlayingBtn && currentPlayingBtn !== btn){
-    currentPlayingBtn.textContent = "▶";
-  }
-  
-  if(btn._audio && !btn._audio.paused){
-    btn._audio.pause();
-    btn.textContent = "▶";
-    currentPlayingBtn = null;
-    return;
-  }
-
-  if(!btn._audio){
-    btn._audio = new Audio(src);
-    btn._audio.onended = ()=>{
-      btn.textContent = "▶";
-      currentPlayingBtn = null;
-    };
-    btn._audio.onloadedmetadata = ()=>{
-      const dur = Math.ceil(btn._audio.duration);
-      const m = String(Math.floor(dur/60)).padStart(2,'0');
-      const s = String(dur%60).padStart(2,'0');
-      btn.nextElementSibling.textContent = `${m}:${s}`;
-    };
-  }
-  
-  btn._audio.play();
-  btn.textContent = "⏸";
-  currentPlayingBtn = btn;
 }
 
 async function loadMsg(){
@@ -929,7 +960,7 @@ async function loadMsg(){
 
 async function sendMsg(){
   const text = document.getElementById("msgInput").value.trim();
-  if(!text && !currentImage && !currentAudio) return;
+  if(!text && !currentImage && !currentAudioDataUrl) return;
   
   const payload = {
     room_id:roomId,
@@ -941,7 +972,7 @@ async function sendMsg(){
   };
   if(currentReplyId) payload.reply_to = currentReplyId;
   if(currentImage) payload.image = currentImage;
-  if(currentAudio) payload.audio = URL.createObjectURL(currentAudio);
+  if(currentAudioDataUrl) payload.audio = currentAudioDataUrl;
   
   const {error} = await sb.from("messages").insert([payload])
   if(error) console.log("送出錯誤：", error);
