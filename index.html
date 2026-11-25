@@ -6,916 +6,258 @@
 <title>匿名私信</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Microsoft JhengHei','PingFang TC',system-ui,sans-serif}
-body{
-  background:linear-gradient(135deg, #fff5f2 0%, #ffe8e0 50%, #fff0e6 100%);
-  color:#5a4a4a;
-  max-width:600px;
-  margin:2rem auto;
-  padding:0 1rem;
-  min-height:100vh;
-}
-h2{text-align:center;margin-bottom:1.2rem;color:#d47a6a;font-weight:600;letter-spacing:1px}
-.tab{display:flex;gap:0.4rem;margin-bottom:1rem}
-.tab button{
-  flex:1;padding:0.7rem 0.5rem;
-  background:#fff;
-  border:1px solid #ffd4c8;
-  color:#a86558;
-  border-radius:20px;
-  cursor:pointer;
-  font-size:0.9rem;
-  transition:all 0.2s ease;
-  box-shadow:0 2px 6px rgba(212,122,106,0.08);
-}
-.tab button.active{
-  background:linear-gradient(135deg, #ffb4a2 0%, #ff9a8b 100%);
-  border-color:#ff9a8b;
-  color:#fff;
-  box-shadow:0 4px 10px rgba(255,154,139,0.3);
-}
-.tab button:hover{transform:translateY(-1px)}
-
-#chatBox, #announcementBox{
-  border:1px solid #ffd9cc;
-  border-radius:18px;
-  padding:1rem;
-  height:420px;
-  overflow-y:auto;
-  margin-bottom:1rem;
-  background:#fffaf7;
-  box-shadow:0 4px 15px rgba(212,122,106,0.08);
-}
-#announcementBox{display:none}
-
-.msg{margin:0.7rem 0;padding:0.8rem 1rem;border-radius:18px;max-width:80%;position:relative;line-height:1.5;word-break:break-word}
-.other{
-  background:#fff;
-  margin-right:auto;
-  border:1px solid #ffe0d5;
-  border-bottom-left-radius:6px;
-  box-shadow:0 2px 6px rgba(212,122,106,0.06);
-}
-.me{
-  background:linear-gradient(135deg, #ffc4b3 0%, #ffa899 100%);
-  margin-left:auto;
-  color:#fff;
-  border-bottom-right-radius:6px;
-  box-shadow:0 3px 8px rgba(255,154,139,0.25);
-}
-.msg img{max-width:100%;border-radius:12px;margin:0.4rem 0;display:block}
-.msg audio{max-width:100%;margin:0.4rem 0;display:block;height:36px;border-radius:8px}
-.msg-nick{font-size:0.75rem;color:#d47a6a;font-weight:600;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.3rem}
-.msg-nick::before{content:"";width:6px;height:6px;border-radius:50%;background:#ffb4a2;display:inline-block}
-.other .msg-nick{text-align:left}
-.reply-quote{
-  font-size:0.75rem;
-  color:#b08a80;
-  border-left:2px solid #ffc4b3;
-  padding-left:0.5rem;
-  margin-bottom:0.4rem;
-  opacity:0.9;
-  text-align:left;
-  background:#fff5f2;
-  padding:0.3rem 0.6rem;
-  border-radius:6px;
-}
-.time{font-size:0.7rem;color:#c9a79e;margin-top:5px}
-.reply-btn{
-  font-size:0.7rem;
-  background:none;
-  border:none;
-  color:#c9a79e;
-  cursor:pointer;
-  padding:0 0.3rem;
-  margin-top:0.2rem;
-}
-.reply-btn:hover{color:#d47a6a}
-.reply-status{
-  font-size:0.8rem;
-  color:#d47a6a;
-  margin-bottom:0.6rem;
-  display:none;
-  background:#fff0eb;
-  padding:0.5rem 0.8rem;
-  border-radius:10px;
-  border:1px dashed #ffc4b3;
-}
-.reply-status span{cursor:pointer;color:#b08a80;margin-left:0.5rem}
-
-/* 表情反應 */
-.msg-reactions{display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap;justify-content:flex-end}
-.other .msg-reactions{justify-content:flex-start}
-.reaction-item{
-  background:#fff;
-  border:1px solid #ffd4c8;
-  border-radius:12px;
-  padding:0.15rem 0.5rem;
-  font-size:0.85rem;
-  cursor:pointer;
-  transition:all 0.2s;
-}
-.reaction-item:hover{background:#fff0eb;transform:scale(1.05)}
-.msg-reaction-bar{
-  position:absolute;bottom:-16px;left:8px;
-  display:none;gap:0.2rem;background:#fff;
-  border:1px solid #ffd4c8;
-  border-radius:20px;padding:0.25rem 0.6rem;z-index:10;
-  box-shadow:0 2px 8px rgba(212,122,106,0.1);
-}
-.msg:hover .msg-reaction-bar{display:flex}
-.me .msg-reaction-bar{left:auto;right:8px}
-.msg-reaction-bar span{cursor:pointer;font-size:0.9rem;padding:0 0.2rem;transition:transform 0.2s}
-.msg-reaction-bar span:hover{transform:scale(1.2)}
-
-/* 預覽區塊 */
-.image-preview,.audio-preview{display:none;margin-bottom:0.6rem;position:relative;width:fit-content}
-.image-preview img{max-width:120px;border-radius:10px;border:1px solid #ffd4c8}
-.audio-preview audio{max-width:280px;border-radius:10px;height:36px}
-.image-preview .close-btn,.audio-preview .close-btn{
-  position:absolute;top:-8px;right:-8px;
-  background:#d47a6a;color:#fff;
-  border-radius:50%;width:20px;height:20px;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;font-size:0.75rem;z-index:2;
-  box-shadow:0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* 錄音計時 */
-.recording-info{
-  display:none;align-items:center;gap:0.5rem;
-  margin-bottom:0.6rem;color:#e06666;
-  font-size:0.85rem;background:#ffeaea;
-  padding:0.4rem 0.8rem;border-radius:10px;
-  width:fit-content;border:1px solid #ffcaca;
-}
-.recording-dot{
-  width:8px;height:8px;border-radius:50%;
-  background:#ff5252;animation:blink 1s infinite;
-}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
-
-#inputArea{display:flex;gap:0.5rem;align-items:flex-end}
-.input-tools{display:flex;gap:0.4rem;flex-direction:column}
-.input-tools button{
-  width:42px;height:42px;
-  background:#fff;
-  border:1px solid #ffd4c8;
-  color:#d47a6a;
-  border-radius:50%;
-  cursor:pointer;
-  font-size:1.1rem;
-  display:flex;align-items:center;justify-content:center;
-  transition:all 0.2s;
-  box-shadow:0 2px 6px rgba(212,122,106,0.08);
-}
-.input-tools button:hover{background:#fff0eb;transform:scale(1.05)}
-.input-tools button.recording{
-  background:#e06666;border-color:#e06666;color:#fff;
-  animation:pulse 1.5s infinite;
-}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(224,102,102,0.4)}50%{box-shadow:0 0 0 8px rgba(224,102,102,0)}}
-
-.emoji-panel{
-  display:none;gap:0.4rem;padding:0.7rem;
-  background:#fff;border:1px solid #ffd4c8;
-  border-radius:12px;margin-bottom:0.6rem;flex-wrap:wrap;
-  box-shadow:0 2px 8px rgba(212,122,106,0.08);
-}
-.emoji-panel span{font-size:1.3rem;cursor:pointer;padding:0.2rem 0.4rem;border-radius:6px;transition:background 0.2s}
-.emoji-panel span:hover{background:#fff0eb}
-textarea{
-  flex:1;padding:0.8rem 1rem;
-  background:#fff;
-  border:1px solid #ffd4c8;
-  border-radius:14px;
-  color:#5a4a4a;
-  resize:none;
-  font-family:inherit;
-  box-shadow:inset 0 1px 3px rgba(212,122,106,0.05);
-}
-textarea:focus{outline:none;border-color:#ff9a8b}
-button.send-btn{
-  padding:0 1.2rem;
-  height:42px;
-  background:linear-gradient(135deg, #ffb4a2 0%, #ff9a8b 100%);
-  color:white;
-  border:none;
-  border-radius:14px;
-  cursor:pointer;
-  font-weight:500;
-  box-shadow:0 3px 8px rgba(255,154,139,0.3);
-  transition:all 0.2s;
-}
-button.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(255,154,139,0.35)}
-
-/* 公告區樣式 */
-.ann-card{
-  background:#fff;
-  border:1px solid #ffd9cc;
-  border-radius:16px;
-  padding:1rem;
-  margin-bottom:1rem;
-  box-shadow:0 3px 10px rgba(212,122,106,0.08);
-}
-.ann-header{
-  display:flex;justify-content:space-between;align-items:center;
-  margin-bottom:0.6rem;
-  padding-bottom:0.5rem;
-  border-bottom:1px dashed #ffd9cc;
-}
-.ann-title{font-weight:600;color:#d47a6a;font-size:0.95rem}
-.ann-time{font-size:0.7rem;color:#c9a79e}
-.ann-content{line-height:1.6;margin-bottom:0.8rem;color:#5a4a4a;white-space:pre-wrap}
-.ann-reply-toggle{
-  font-size:0.75rem;color:#d47a6a;cursor:pointer;
-  background:#fff0eb;padding:0.25rem 0.6rem;border-radius:8px;
-}
-.ann-replies{
-  margin-top:0.8rem;
-  padding-top:0.8rem;
-  border-top:1px solid #ffe8e0;
-  display:none;
-}
-.ann-replies.show{display:block}
-.reply-item{
-  background:#fff8f5;
-  padding:0.6rem 0.8rem;
-  border-radius:10px;
-  margin-bottom:0.5rem;
-  font-size:0.9rem;
-}
-.reply-item .reply-nick{font-size:0.7rem;color:#d47a6a;font-weight:600;margin-bottom:0.2rem}
-.reply-item .reply-time{font-size:0.65rem;color:#c9a79e;margin-top:0.2rem;text-align:right}
-.reply-input-area{
-  display:flex;gap:0.4rem;margin-top:0.6rem;align-items:flex-end;
-}
-.reply-input-area textarea{
-  flex:1;padding:0.6rem 0.8rem;border-radius:10px;font-size:0.9rem;min-height:36px;
-}
-.reply-input-area button{
-  height:36px;padding:0 0.8rem;border-radius:10px;font-size:0.85rem;
-}
-
-/* 滾動條美化 */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:#fff5f2;border-radius:3px}
-::-webkit-scrollbar-thumb{background:#ffd4c8;border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#ffb4a2}
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#121212;color:#eee;max-width:600px;margin:2rem auto;padding:0 1rem}
+h2{text-align:center;margin-bottom:1rem;color:#ccc}
+.tab{display:flex;gap:0.5rem;margin-bottom:1rem}
+.tab button{flex:1;padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
+.tab button.active{background:#333;border-color:#555}
+.chat-box{height:60vh;overflow-y:auto;border:1px solid #333;border-radius:8px;padding:0.8rem;background:#181818;margin-bottom:1rem}
+.msg-wrap{margin:0.4rem 0;display:flex}
+.msg-left{justify-content:flex-start}
+.msg-right{justify-content:flex-end}
+.msg{max-width:75%;padding:0.6rem;border-radius:10px;position:relative}
+.msg-left .msg{background:#272727}
+.msg-right .msg{background:#204066}
+.msg-nick{font-size:0.75rem;color:#aaa;margin-bottom:0.2rem}
+.msg-time{font-size:0.7rem;color:#999;margin-top:0.2rem;text-align:right}
+.msg-content{word-break:break-all}
+.msg-img{max-width:100%;border-radius:6px;margin-top:0.3rem}
+.audio-wrap{margin-top:0.3rem;display:flex;align-items:center;gap:0.4rem}
+audio{height:32px}
+.del-audio-btn{padding:0.2rem 0.4rem;background:#444;border:none;color:#fff;border-radius:4px;font-size:0.75rem;cursor:pointer}
+.reaction-bar{display:flex;gap:0.3rem;margin-top:0.3rem}
+.reaction-btn{background:#222;border:1px solid #444;color:#ddd;padding:0.2rem 0.4rem;border-radius:6px;font-size:0.85rem;cursor:pointer}
+.reaction-btn.active{background:#365888;border-color:#4878b8}
+.input-area{display:flex;gap:0.4rem;flex-wrap:wrap}
+#msgInput{flex:1;min-width:120px;padding:0.6rem;background:#222;border:1px solid #444;color:#eee;border-radius:8px}
+.send-btn, .rec-btn, .img-btn{padding:0.6rem;background:#222;border:1px solid #444;color:#ddd;border-radius:8px;cursor:pointer}
+.rec-btn.recording{background:#772222;border-color:#aa3333}
+.rec-timer{color:#ff8888;font-size:0.85rem;margin-left:0.4rem}
+#fileInput{display:none}
+.announce-item{border:1px solid #333;border-radius:8px;padding:0.8rem;margin-bottom:0.8rem;background:#191919}
+.announce-content{margin-bottom:0.5rem}
+.announce-reply{margin-top:0.6rem;padding:0.4rem;background:#222;border-radius:6px;font-size:0.9rem}
+.announce-input{width:100%;padding:0.5rem;background:#222;border:1px solid #444;color:#eee;border-radius:6px;margin-top:0.4rem}
 </style>
 </head>
 <body>
 <h2>匿名私信</h2>
 <div class="tab">
-  <button id="btnAnnouncement" class="active">📢 公告討論</button>
-  <button id="btnGlobal">🌐 公開大廳</button>
-  <button id="btnPrivate">✉️ 專屬私信</button>
+<button class="active" data-tab="chat">聊天</button>
+<button data-tab="announce">公告討論</button>
 </div>
 
-<div id="announcementBox"></div>
-<div id="chatBox"></div>
-
-<div class="reply-status" id="replyStatus">
-  回覆：<span id="replyText"></span>
-  <span onclick="cancelReply()">✕</span>
+<div id="chatPage">
+<div class="chat-box" id="chatBox"></div>
+<div class="input-area">
+<input type="text" id="msgInput" placeholder="輸入訊息">
+<button class="send-btn" onclick="sendMessage()">送出</button>
+<button class="rec-btn" id="recBtn" onclick="toggleRec()">🎤錄音<span id="recTimer" class="rec-timer"></span></button>
+<button class="img-btn" onclick="document.getElementById('fileInput').click()">📷圖片</button>
+<input type="file" id="fileInput" accept="image/*" onchange="sendImage(event)">
+</div>
 </div>
 
-<div class="emoji-panel" id="emojiPanel">
-  <span>😀</span><span>😂</span><span>🥰</span><span>👍</span><span>😭</span>
-  <span>😡</span><span>😮</span><span>🎉</span><span>💯</span><span>❤️</span>
-</div>
-
-<div class="image-preview" id="imagePreview">
-  <img id="previewImg">
-  <span class="close-btn" onclick="clearImage()">✕</span>
-</div>
-
-<div class="recording-info" id="recordingInfo">
-  <span class="recording-dot"></span>
-  <span>錄音中 <span id="timerDisplay">00:00</span></span>
-</div>
-
-<div class="audio-preview" id="audioPreview">
-  <audio id="previewAudio" controls>
-  <span class="close-btn" onclick="clearAudio()">✕</span>
-</div>
-
-<div id="inputArea">
-  <div class="input-tools">
-    <button class="emoji-btn" onclick="toggleEmoji()" title="表情">😊</button>
-    <button onclick="document.getElementById('imageInput').click()" title="圖片">📎</button>
-    <button id="recBtn" onclick="toggleRecord()" title="錄音">🎤</button>
-    <input type="file" id="imageInput" accept="image/*" style="display:none">
-  </div>
-  <textarea id="msgInput" placeholder="寫訊息..." rows="2"></textarea>
-  <button class="send-btn" onclick="sendMsg()">送出</button>
+<div id="announcePage" style="display:none">
+<div id="announceList"></div>
 </div>
 
 <script>
-const SUPABASE_URL = "https://lwbqcmvwqtlcgsccezxb.supabase.co";
-const SUPABASE_KEY = "sb_publishable_jW632EqSBRq4hBCM4xdP4A_1ftKbvMM";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = "你的supabase url";
+const SUPABASE_KEY = "你的anon key";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const GLOBAL_ROOM = "global";
-const ADMIN_PREFIX = "dm_admin_";
-const ADMIN_DISPLAY_NAME = "口哈內";
-const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
-
-let currentView = "announcement"; // announcement / chat
-let roomId;
-let channel = null;
-
-// 回覆狀態
-let currentReplyId = null;
-let currentImage = null;
-let currentAudio = null;
-
-// 錄音相關
-let recorder = null;
-let audioChunks = [];
-let stream = null;
-let timerInterval = null;
-let recordingSeconds = 0;
-let audioDiscarded = false;
-
-// 訪客ID
-function getVisitorId(){
-  let vid = localStorage.getItem("visitor_id");
-  if(!vid){
-    vid = crypto.randomUUID();
-    localStorage.setItem("visitor_id", vid);
-  }
-  return vid;
+let roomId = "global";
+let senderId = localStorage.getItem("senderId");
+if(!senderId){
+    senderId = Math.random().toString(36).slice(2,10);
+    localStorage.setItem("senderId", senderId);
 }
-function getNickname(){
-  const vid = getVisitorId();
-  let hash = 0;
-  for(let i=0; i<vid.length; i++){
-    hash = ((hash << 5) - hash) + vid.charCodeAt(i);
-    hash |= 0;
-  }
-  const num = Math.abs(hash) % 900 + 100;
-  return `訪客 #${num}`;
-}
-const visitorId = getVisitorId();
-const privateRoomId = ADMIN_PREFIX + visitorId;
-
-// 時間格式化
-function formatTime(isoString){
-  const date = new Date(isoString);
-  if (isNaN(date.getTime())) return isoString;
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${m}-${d} ${hh}:${mm}`;
+let nickname = localStorage.getItem("nickname");
+if(!nickname){
+    nickname = "訪客"+Math.floor(Math.random()*9999);
+    localStorage.setItem("nickname", nickname);
 }
 
-// 通知音效
-const notifyAudio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
-async function requestNotify() {
-  if (!("Notification" in window)) return false;
-  const perm = await Notification.requestPermission();
-  return perm === "granted";
-}
-function showNotify(title, body) {
-  if (document.hidden && Notification.permission === "granted") {
-    new Notification(title, { body });
-  }
-  notifyAudio.play().catch(()=>{});
-}
-requestNotify();
-
-// 讀取表情紀錄
-function getReactionRecord(){
-  try {
-    return JSON.parse(localStorage.getItem("reaction_record") || "{}");
-  } catch(e){
-    return {};
-  }
-}
-function setReactionRecord(record){
-  localStorage.setItem("reaction_record", JSON.stringify(record));
+// 時區函數 +8 台北時間
+function formatTime(ts){
+    const d = new Date(ts);
+    const t = new Date(d.getTime() + 8*60*60*1000);
+    const m = String(t.getMonth()+1).padStart(2,'0');
+    const day = String(t.getDate()).padStart(2,'0');
+    const h = String(t.getHours()).padStart(2,'0');
+    const mi = String(t.getMinutes()).padStart(2,'0');
+    return `${m}-${day} ${h}:${mi}`;
 }
 
-// 切換檢視模式
-function switchView(view){
-  currentView = view;
-  document.getElementById("chatBox").style.display = view === "chat" ? "block" : "none";
-  document.getElementById("announcementBox").style.display = view === "announcement" ? "block" : "none";
-  document.getElementById("inputArea").style.display = view === "chat" ? "flex" : "none";
-  document.getElementById("emojiPanel").style.display = "none";
-  document.getElementById("imagePreview").style.display = "none";
-  document.getElementById("audioPreview").style.display = "none";
-  document.getElementById("recordingInfo").style.display = "none";
-  document.getElementById("replyStatus").style.display = "none";
-  
-  document.getElementById("btnAnnouncement").classList.toggle("active", view === "announcement");
-  document.getElementById("btnGlobal").classList.toggle("active", view === "chat" && roomId === GLOBAL_ROOM);
-  document.getElementById("btnPrivate").classList.toggle("active", view === "chat" && roomId === privateRoomId);
-
-  if(view === "announcement"){
-    loadAnnouncements();
-  }else{
-    loadMsg();
-    subscribeRealtime();
-  }
-}
-
-// 切換聊天室
-function switchRoom(newRoom){
-  roomId = newRoom;
-  cancelReply();
-  clearImage();
-  clearAudio();
-  stopTimer();
-  switchView("chat");
-}
-
-document.getElementById("btnAnnouncement").onclick = ()=>switchView("announcement");
-document.getElementById("btnGlobal").onclick = ()=>switchRoom(GLOBAL_ROOM);
-document.getElementById("btnPrivate").onclick = ()=>switchRoom(privateRoomId);
-
-// 初始化
-const urlParams = new URLSearchParams(location.search);
-const urlRoom = urlParams.get("room");
-if(urlRoom){
-  roomId = urlRoom;
-  switchView("chat");
-}else{
-  roomId = privateRoomId;
-  switchView("announcement");
-}
-
-// 表情面板
-function toggleEmoji(){
-  const panel = document.getElementById("emojiPanel");
-  panel.style.display = panel.style.display === "flex" ? "none" : "flex";
-}
-document.querySelectorAll("#emojiPanel span").forEach(el=>{
-  el.onclick = ()=>{
-    document.getElementById("msgInput").value += el.innerText;
-    document.getElementById("msgInput").focus();
-  }
+// 切換頁籤
+document.querySelectorAll(".tab button").forEach(b=>{
+    b.onclick = ()=>{
+        document.querySelectorAll(".tab button").forEach(x=>x.classList.remove("active"));
+        b.classList.add("active");
+        const t = b.dataset.tab;
+        document.getElementById("chatPage").style.display = t==="chat" ? "block":"none";
+        document.getElementById("announcePage").style.display = t==="announce" ? "block":"none";
+        if(t==="announce") loadAnnounce();
+    }
 })
 
-// 圖片上傳
-document.getElementById("imageInput").onchange = async function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  await new Promise(r=>img.onload = r);
-  
-  const maxWidth = 800;
-  let w = img.width, h = img.height;
-  if(w > maxWidth){
-    h = h * maxWidth / w;
-    w = maxWidth;
-  }
-  
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-  
-  currentImage = canvas.toDataURL("image/jpeg", 0.8);
-  document.getElementById("previewImg").src = currentImage;
-  document.getElementById("imagePreview").style.display = "block";
-  e.target.value = "";
+// 聊天即時監聽
+async function loadMsg(){
+    const {data} = await supabase.from("messages").select("*").eq("room_id",roomId).order("created_at",{asc:true});
+    renderMsg(data);
 }
-
-function clearImage(){
-  currentImage = null;
-  document.getElementById("imagePreview").style.display = "none";
-  document.getElementById("previewImg").src = "";
-}
-
-// 錄音功能
-function startTimer(){
-  recordingSeconds = 0;
-  updateTimerDisplay();
-  timerInterval = setInterval(()=>{
-    recordingSeconds++;
-    updateTimerDisplay();
-  }, 1000);
-}
-
-function stopTimer(){
-  if(timerInterval){
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  document.getElementById("recordingInfo").style.display = "none";
-}
-
-function updateTimerDisplay(){
-  const m = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
-  const s = String(recordingSeconds % 60).padStart(2, '0');
-  document.getElementById("timerDisplay").innerText = `${m}:${s}`;
-}
-
-async function toggleRecord(){
-  if(!recorder){
-    try{
-      audioDiscarded = false;
-      stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      recorder = new MediaRecorder(stream);
-      audioChunks = [];
-      recorder.ondataavailable = e=>{
-        audioChunks.push(e.data);
-      }
-      recorder.onstop = ()=>{
-        if(audioDiscarded) return;
-        const blob = new Blob(audioChunks, {type:"audio/webm"});
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = ()=>{
-          currentAudio = reader.result;
-          document.getElementById("previewAudio").src = currentAudio;
-          document.getElementById("audioPreview").style.display = "block";
+function renderMsg(list){
+    const box = document.getElementById("chatBox");
+    box.innerHTML = "";
+    list.forEach(m=>{
+        const isMe = m.sender_id === senderId;
+        const wrap = document.createElement("div");
+        wrap.className = "msg-wrap "+(isMe?"msg-right":"msg-left");
+        let html = `<div class="msg">
+        <div class="msg-nick">${m.nickname}</div>
+        <div class="msg-content">`;
+        if(m.type==="img"){
+            html += `<img class="msg-img" src="${m.content}">`;
+        }else if(m.type==="audio"){
+            html += `<div class="audio-wrap"><audio controls src="${m.content}"></div>`;
+        }else{
+            html += m.content;
         }
-        stream.getTracks().forEach(t=>t.stop());
-        stream = null;
-        recorder = null;
+        html += `</div>
+        <div class="msg-time">${formatTime(m.created_at)}</div>
+        <div class="reaction-bar">
+        ${["👍","❤️","😂","😯","😢","😡"].map(em=>{
+            const has = m.reaction_users?.includes(senderId);
+            return `<button class="reaction-btn ${has?'active':''}" onclick="toggleReaction('${m.id}','${em}')">${em} ${m[em]||0}</button>`
+        }).join("")}
+        </div>
+        </div>`;
+        wrap.innerHTML = html;
+        box.appendChild(wrap);
+    })
+    box.scrollTop = box.scrollHeight;
+}
+supabase.channel("msg").on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},()=>loadMsg()).subscribe();
+loadMsg();
+
+async function sendMessage(){
+    const i = document.getElementById("msgInput");
+    const txt = i.value.trim();
+    if(!txt) return;
+    await supabase.from("messages").insert({
+        room_id:roomId, sender_id:senderId, nickname:nickname,
+        content:txt, type:"text", created_at:new Date().toISOString()
+    })
+    i.value = "";
+}
+async function sendImage(e){
+    const f = e.target.files[0];
+    if(!f) return;
+    const name = Date.now()+"_"+f.name;
+    const {data,error} = await supabase.storage.from("chatimg").upload(name,f);
+    if(error) return alert("圖片上傳失敗");
+    const {data:urlData} = supabase.storage.from("chatimg").getPublicUrl(name);
+    await supabase.from("messages").insert({
+        room_id:roomId, sender_id:senderId, nickname:nickname,
+        content:urlData.publicUrl, type:"img", created_at:new Date().toISOString()
+    })
+    e.target.value = "";
+}
+
+// 錄音
+let rec = null;
+let recStream = null;
+let recTimer = null;
+let recSec = 0;
+async function toggleRec(){
+    if(rec){
+        rec.stop();
+        clearInterval(recTimer);
+        rec = null;
         document.getElementById("recBtn").classList.remove("recording");
-        document.getElementById("recBtn").innerText = "🎤";
-        stopTimer();
-      }
-      recorder.start();
-      startTimer();
-      document.getElementById("recordingInfo").style.display = "flex";
-      document.getElementById("recBtn").classList.add("recording");
-      document.getElementById("recBtn").innerText = "⏹";
-    }catch(err){
-      alert("無法取得麥克風權限，請使用 HTTPS 網址並允許權限");
-      console.error(err);
+        document.getElementById("recTimer").textContent = "";
+        return;
     }
-  }else{
-    recorder.stop();
-  }
-}
-
-function clearAudio(){
-  audioDiscarded = true;
-  currentAudio = null;
-  recordingSeconds = 0;
-  document.getElementById("audioPreview").style.display = "none";
-  document.getElementById("previewAudio").src = "";
-  const audioEl = document.getElementById("previewAudio");
-  audioEl.pause();
-  audioEl.src = "";
-}
-
-// 回覆功能
-function setReply(msgId, content){
-  currentReplyId = msgId;
-  document.getElementById("replyText").innerText =
-    content.length > 20 ? content.slice(0,20)+"..." : content;
-  document.getElementById("replyStatus").style.display = "block";
-  document.getElementById("msgInput").focus();
-}
-function cancelReply(){
-  currentReplyId = null;
-  document.getElementById("replyStatus").style.display = "none";
+    const s = await navigator.mediaDevices.getUserMedia({audio:true});
+    recStream = s;
+    rec = new MediaRecorder(s);
+    const chunks = [];
+    rec.ondataavailable = e=>chunks.push(e.data);
+    rec.onstop = async ()=>{
+        const blob = new Blob(chunks,{type:"audio/webm"});
+        const url = URL.createObjectURL(blob);
+        const ok = confirm("送出這段錄音嗎？取消就刪除");
+        if(!ok){
+            recStream.getTracks().forEach(t=>t.stop());
+            URL.revokeObjectURL(url);
+            return;
+        }
+        const name = Date.now()+".webm";
+        const {data,err} = await supabase.storage.from("chataudio").upload(name,blob);
+        if(err) return alert("錄音上傳失敗");
+        const {data:urlData} = supabase.storage.from("chataudio").getPublicUrl(name);
+        await supabase.from("messages").insert({
+            room_id:roomId, sender_id:senderId, nickname:nickname,
+            content:urlData.publicUrl, type:"audio", created_at:new Date().toISOString()
+        })
+        recStream.getTracks().forEach(t=>t.stop());
+    }
+    rec.start();
+    document.getElementById("recBtn").classList.add("recording");
+    recSec=0;
+    recTimer = setInterval(()=>{
+        recSec++;
+        document.getElementById("recTimer").textContent = recSec+"s";
+    },1000)
 }
 
 // 表情反應
-window.addReaction = async function(msgId, emoji){
-  const record = getReactionRecord();
-  const key = `${msgId}_${emoji}`;
-  const hasReacted = !!record[key];
-
-  updateReactionDom(msgId, emoji, hasReacted ? -1 : 1);
-
-  if(hasReacted){
-    delete record[key];
-  }else{
-    record[key] = true;
-  }
-  setReactionRecord(record);
-
-  try {
-    const {data: row, error: selectErr} = await sb
-      .from("messages")
-      .select("reactions")
-      .eq("id", msgId)
-      .single();
-    
-    if(selectErr) throw selectErr;
-
-    const current = row.reactions && typeof row.reactions === 'object' ? row.reactions : {};
-    current[emoji] = (current[emoji] || 0) + (hasReacted ? -1 : 1);
-    if(current[emoji] <= 0) delete current[emoji];
-
-    const {error: updateErr} = await sb
-      .from("messages")
-      .update({ reactions: current })
-      .eq("id", msgId);
-    
-    if(updateErr) throw updateErr;
-
-  } catch(e) {
-    console.error("表情同步失敗：", e);
-    updateReactionDom(msgId, emoji, hasReacted ? 1 : -1);
-    if(hasReacted){
-      record[key] = true;
+async function toggleReaction(mid,em){
+    const {data:msg} = await supabase.from("messages").select("reaction_users,"+em).eq("id",mid).single();
+    let arr = msg.reaction_users || [];
+    let cnt = msg[em]||0;
+    if(arr.includes(senderId)){
+        arr = arr.filter(x=>x!==senderId);
+        cnt--;
     }else{
-      delete record[key];
+        arr.push(senderId);
+        cnt++;
     }
-    setReactionRecord(record);
-  }
+    await supabase.from("messages").update({reaction_users:arr, [em]:cnt}).eq("id",mid);
 }
 
-function updateReactionDom(msgId, emoji, delta){
-  const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
-  if(!msgEl) return;
-
-  let reactionsBox = msgEl.querySelector(".msg-reactions");
-  let target = reactionsBox ? reactionsBox.querySelector(`[data-emoji="${emoji}"]`) : null;
-
-  let count = target ? parseInt(target.dataset.count) : 0;
-  count += delta;
-
-  if(count <= 0){
-    if(target) target.remove();
-  } else {
-    if(target){
-      target.dataset.count = count;
-      target.childNodes[0].textContent = `${emoji} ${count}`;
-    } else {
-      if(!reactionsBox){
-        reactionsBox = document.createElement("div");
-        reactionsBox.className = "msg-reactions";
-        const timeEl = msgEl.querySelector(".time");
-        timeEl.parentNode.insertBefore(reactionsBox, timeEl);
-      }
-      const span = document.createElement("span");
-      span.className = "reaction-item";
-      span.dataset.emoji = emoji;
-      span.dataset.count = count;
-      span.innerText = `${emoji} ${count}`;
-      span.onclick = ()=>addReaction(msgId, emoji);
-      reactionsBox.appendChild(span);
+// 公告
+async function loadAnnounce(){
+    const {data} = await supabase.from("announcements").select("*").eq("room_id","global").order("created_at",{desc:true});
+    const listEl = document.getElementById("announceList");
+    listEl.innerHTML = "";
+    for(const a of data){
+        const {data:replies} = await supabase.from("announcement_replies").select("*").eq("announcement_id",a.id).order("created_at",{asc:true});
+        let repHtml = "";
+        replies.forEach(r=>repHtml += `<div class="announce-reply"><b>${r.nickname}</b>：${r.content}</div>`);
+        const div = document.createElement("div");
+        div.className = "announce-item";
+        div.innerHTML = `
+        <div class="announce-content">${a.content}</div>
+        <div class="msg-time">${formatTime(a.created_at)}</div>
+        ${repHtml}
+        ${a.allow_reply ? `<input class="announce-input" placeholder="回覆這則公告" onkeydown="if(event.key==='Enter')submitAnnReply(${a.id},this.value)">`:"<div style='color:#888'>關閉留言</div>"}
+        `
+        listEl.appendChild(div);
     }
-  }
-
-  if(reactionsBox && reactionsBox.children.length === 0){
-    reactionsBox.remove();
-  }
 }
-
-// 渲染聊天
-function renderChat(rows){
-  const box = document.getElementById("chatBox");
-  box.innerHTML = "";
-  rows.forEach(r=>{
-    const div = document.createElement("div");
-
-    let isMe = false;
-    if(r.sender_id && r.sender_id.trim() !== ""){
-      isMe = r.sender_id === visitorId;
-    }
-    div.className = "msg " + (isMe ? "me" : "other");
-    div.dataset.id = r.id;
-    
-    const isAdmin = r.is_admin || r.sender_id === "admin";
-    const nick = isAdmin ? ADMIN_DISPLAY_NAME : (r.nickname || "匿名使用者");
-    div.innerHTML += `<div class="msg-nick">${nick}</div>`;
-
-    if(r.reply_to){
-      const target = rows.find(x=>x.id === r.reply_to);
-      const quoteText = target ? target.content : "已刪除的訊息";
-      const short = quoteText.length > 20 ? quoteText.slice(0,20)+"..." : quoteText;
-      div.innerHTML += `<div class="reply-quote">↩ ${short}</div>`;
-    }
-
-    if(r.image){
-      div.innerHTML += `<img src="${r.image}" alt="圖片">`;
-    }
-
-    if(r.audio){
-      div.innerHTML += `<audio controls><source src="${r.audio}">`;
-    }
-    
-    if(r.content){
-      div.innerHTML += `<div>${r.content}</div>`;
-    }
-    
-    if(r.reactions && Object.keys(r.reactions).length > 0){
-      let reactionHtml = '<div class="msg-reactions">';
-      Object.entries(r.reactions).forEach(([emoji, count])=>{
-        reactionHtml += `<span class="reaction-item" data-emoji="${emoji}" data-count="${count}" onclick="addReaction(${r.id}, '${emoji}')">${emoji} ${count}</span>`;
-      })
-      reactionHtml += '</div>';
-      div.innerHTML += reactionHtml;
-    }
-
-    let barHtml = '<div class="msg-reaction-bar">';
-    QUICK_EMOJIS.forEach(e=>{
-      barHtml += `<span onclick="addReaction(${r.id}, '${e}')">${e}</span>`;
+async function submitAnnReply(aid,txt){
+    txt = txt.trim();
+    if(!txt) return;
+    await supabase.from("announcement_replies").insert({
+        announcement_id:aid, sender_id:senderId, nickname:nickname, content:txt
     })
-    barHtml += '</div>';
-    div.innerHTML += barHtml;
-
-    const replyText = r.content ? r.content.replace(/'/g,"\\'") : "語音訊息";
-    div.innerHTML += `<button class="reply-btn" onclick="setReply(${r.id}, '${replyText}')">回覆</button>`;
-    
-    div.innerHTML += `<div class="time">${formatTime(r.created_at)}</div>`;
-    box.appendChild(div);
-  })
-  box.scrollTop = box.scrollHeight;
+    loadAnnounce();
 }
-
-async function loadMsg(){
-  const {data,error} = await sb
-    .from("messages")
-    .select("*")
-    .eq("room_id", roomId)
-    .order("created_at",{ascending:true})
-  if(!error) renderChat(data);
-}
-
-async function sendMsg(){
-  const text = document.getElementById("msgInput").value.trim();
-  if(!text && !currentImage && !currentAudio) return;
-  
-  const payload = {
-    room_id:roomId,
-    content:text,
-    is_admin:false,
-    sender_id: visitorId,
-    nickname: getNickname(),
-    created_at: new Date().toISOString()
-  };
-  if(currentReplyId) payload.reply_to = currentReplyId;
-  if(currentImage) payload.image = currentImage;
-  if(currentAudio) payload.audio = currentAudio;
-  
-  const {error} = await sb.from("messages").insert([payload])
-  if(error) console.log("送出錯誤：", error);
-  
-  document.getElementById("msgInput").value = "";
-  cancelReply();
-  clearImage();
-  clearAudio();
-}
-
-function subscribeRealtime(){
-  if(channel) channel.unsubscribe();
-  channel = sb.channel(`room-${roomId}`)
-    .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`room_id=eq.${roomId}`},(payload)=>{
-      if(payload.eventType === "INSERT"){
-        loadMsg();
-        showNotify("新訊息", "你有一則新的匿名訊息");
-      } else if(payload.eventType === "UPDATE"){
-        const newRow = payload.new;
-        updateReactionDomFull(newRow.id, newRow.reactions);
-      }
-    })
-    .subscribe()
-}
-
-function updateReactionDomFull(msgId, reactions){
-  const msgEl = document.querySelector(`.msg[data-id="${msgId}"]`);
-  if(!msgEl) return;
-
-  let reactionsBox = msgEl.querySelector(".msg-reactions");
-  if(!reactionsBox){
-    reactionsBox = document.createElement("div");
-    reactionsBox.className = "msg-reactions";
-    const timeEl = msgEl.querySelector(".time");
-    timeEl.parentNode.insertBefore(reactionsBox, timeEl);
-  }
-
-  reactionsBox.innerHTML = "";
-  if(reactions && Object.keys(reactions).length > 0){
-    Object.entries(reactions).forEach(([emoji, count])=>{
-      const span = document.createElement("span");
-      span.className = "reaction-item";
-      span.dataset.emoji = emoji;
-      span.dataset.count = count;
-      span.innerText = `${emoji} ${count}`;
-      span.onclick = ()=>addReaction(msgId, emoji);
-      reactionsBox.appendChild(span);
-    })
-  } else {
-    reactionsBox.remove();
-  }
-}
-
-// ========== 公告區功能 ==========
-async function loadAnnouncements(){
-  const box = document.getElementById("announcementBox");
-  box.innerHTML = '<div style="text-align:center;color:#c9a79e;padding:2rem">載入中...</div>';
-
-  const {data: anns, error} = await sb
-    .from("announcements")
-    .select("*")
-    .eq("room_id", GLOBAL_ROOM)
-    .order("created_at",{ascending:false});
-
-  if(error){
-    console.error("公告載入失敗：", error);
-    box.innerHTML = '<div style="text-align:center;color:#e06666;padding:2rem">載入公告失敗，請稍後再試</div>';
-    return;
-  }
-
-  if(anns.length === 0){
-    box.innerHTML = '<div style="text-align:center;color:#c9a79e;padding:2rem">暫無公告</div>';
-    return;
-  }
-
-  box.innerHTML = "";
-  anns.forEach(ann=>{
-    const card = document.createElement("div");
-    card.className = "ann-card";
-    card.innerHTML = `
-      <div class="ann-header">
-        <div class="ann-title">📢 公告</div>
-        <div class="ann-time">${formatTime(ann.created_at)}</div>
-      </div>
-      <div class="ann-content">${ann.content.replace(/\n/g,'<br>')}</div>
-      <div class="ann-reply-toggle" onclick="toggleReplies(${ann.id})">
-        ${ann.allow_reply ? '💬 查看/發表回應' : '🔒 已關閉回應'}
-      </div>
-      <div class="ann-replies" id="replies-${ann.id}">
-        <div class="reply-list" id="replyList-${ann.id}"></div>
-        ${ann.allow_reply ? `
-          <div class="reply-input-area">
-            <textarea id="replyInput-${ann.id}" placeholder="留下你的回應..." rows="1"></textarea>
-            <button class="send-btn" onclick="submitAnnReply(${ann.id})">送出</button>
-          </div>
-        ` : ''}
-      </div>
-    `;
-    box.appendChild(card);
-    loadAnnReplies(ann.id);
-  });
-}
-
-function toggleReplies(annId){
-  const el = document.getElementById(`replies-${annId}`);
-  el.classList.toggle("show");
-}
-
-async function loadAnnReplies(annId){
-  const listEl = document.getElementById(`replyList-${annId}`);
-  if(!listEl) return;
-
-  const {data: replies, error} = await sb
-    .from("announcement_replies")
-    .select("*")
-    .eq("announcement_id", annId)
-    .order("created_at",{ascending:true});
-
-  if(error || replies.length === 0){
-    listEl.innerHTML = '<div style="font-size:0.8rem;color:#c9a79e;text-align:center;padding:0.5rem">暫無回應</div>';
-    return;
-  }
-
-  listEl.innerHTML = "";
-  replies.forEach(rep=>{
-    const item = document.createElement("div");
-    item.className = "reply-item";
-    item.innerHTML = `
-      <div class="reply-nick">${rep.nickname}</div>
-      <div>${rep.content.replace(/\n/g,'<br>')}</div>
-      <div class="reply-time">${formatTime(rep.created_at)}</div>
-    `;
-    listEl.appendChild(item);
-  });
-}
-
-async function submitAnnReply(annId){
-  const input = document.getElementById(`replyInput-${annId}`);
-  const content = input.value.trim();
-  if(!content) return;
-
-  const payload = {
-    announcement_id: annId,
-    sender_id: visitorId,
-    nickname: getNickname(),
-    content: content,
-    created_at: new Date().toISOString()
-  };
-
-  const { data, error } = await sb
-    .from("announcement_replies")
-    .insert([payload])
-    .select();
-
-  if(error){
-    alert("留言失敗：" + error.message);
-    console.error("留言錯誤：", error);
-    return;
-  }
-
-  input.value = "";
-  loadAnnReplies(annId);
-}
-
+supabase.channel("announce").on("postgres_changes",{event:"*",schema:"public",table:"announcements",filter:`room_id=eq.global`},()=>loadAnnounce()).subscribe();
+supabase.channel("annrep").on("postgres_changes",{event:"*",schema:"public",table:"announcement_replies"},()=>loadAnnounce()).subscribe();
 </script>
 </body>
 </html>
