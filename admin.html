@@ -109,6 +109,23 @@ const ADMIN_NICKNAME = "口哈內";
 const GLOBAL_ROOM = "global";
 const QUICK_EMOJIS = ["👍","❤️","😂","😮","😭"];
 
+// 話題板 room_id → 顯示名（與前台 TOPICS 對齊）
+// 注意：綜合大廳直接沿用舊的 global 房間，舊聊天記錄全部保留在這裡
+const TOPIC_LABELS = {
+  global: "🌐 綜合大廳",
+  topic_sing: "🎤 唱歌專屬",
+  topic_music: "🎵 音樂討論",
+  topic_genshin: "⚔️ 原神",
+  topic_pjsk: "🎹 世界計劃",
+  topic_mood: "🫂 心事分享",
+  topic_study: "📚 讀書學習區"
+};
+function roomLabel(roomId){
+  if(TOPIC_LABELS[roomId]) return TOPIC_LABELS[roomId];
+  if(roomId.startsWith("dm_admin_")) return "✉️ 專屬私信";
+  return roomId;
+}
+
 // ========== 時間格式化：指定台北時區，月-日 時:分 ==========
 function formatTime(isoString){
   if(!isoString) return "";
@@ -226,7 +243,7 @@ async function loadAllRooms(){
     roomDiv.className = "room";
     roomDiv.innerHTML = `
       <div class="room-header" onclick="toggleRoom('${roomId}')">
-        <div class="room-id">房間ID：${roomId}</div>
+        <div class="room-id">${TOPIC_LABELS[roomId] ? TOPIC_LABELS[roomId] + "　·　" + roomId : roomLabel(roomId)}</div>
         <div class="room-toggle" id="toggle-${roomId}">−</div>
       </div>
       <div class="room-body" id="body-${roomId}">
